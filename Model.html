@@ -1,0 +1,409 @@
+<script>
+/* =====================================================================
+ * Model.html — MỘT NGUỒN DỮ LIỆU cho xem trước (client) và xuất Word (server)
+ * Server nạp file này bằng eval (xem CVm_ trong Code.gs); client nhúng bằng include().
+ * ===================================================================== */
+(function (root) {
+  'use strict';
+  var CV = {};
+  var DOTS = '………………………';
+  CV.CCCD_PLACE = 'Cục Cảnh sát quản lý hành chính về trật tự xã hội';
+  CV.DEG_RANK = { 'Cử nhân': 1, 'Kỹ sư': 1, 'Thạc sĩ': 2, 'Tiến sĩ': 3, 'Tiến sĩ (DBA)': 3 };
+  CV.LEVELS = ['Nhà nước', 'Bộ', 'Ngành', 'Tỉnh/Thành phố', 'Trường/Cơ sở'];
+  CV.ROLES = ['Chủ nhiệm', 'Phó chủ nhiệm', 'Thành viên chính', 'Thành viên'];
+  CV.INDEX_CLASS = { isi_scopus: 'ISI/Scopus', intl_other: 'Quốc tế khác', domestic: 'Trong nước' };
+  CV.PUB_TYPE = { article: 'Bài báo tạp chí', conference: 'Báo cáo hội thảo', book: 'Sách/giáo trình' };
+  CV.AWARD_KIND = { giai_thuong: 'Giải thưởng', sang_che: 'Bằng sáng chế', giai_phap: 'Giải pháp hữu ích', chuyen_giao: 'Chuyển giao công nghệ' };
+
+  function s(v) { return v == null ? '' : String(v).trim(); }
+  function num(v) { var n = parseInt(v, 10); return isNaN(n) ? 0 : n; }
+  CV.s = s; CV.num = num;
+  CV.norm = function (x) {
+    return s(x).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+  };
+  CV.uid = function () { return 'i' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); };
+
+  CV.emptyProfile = function () {
+    return {
+      v: 1,
+      basic: { fullName: '', gender: '', dob: '', pob: '', hometown: '', ethnicity: 'Kinh', position: '', workplace: '', address: '',
+        phoneCQ: '', phoneNR: '', phoneDD: '', fax: '', contactEmail: '', contactEmailVerified: false,
+        hvDegree: '', hvYear: '', hvCountry: '', hvTitle: '', hvTitleYear: '' },
+      idDoc: { type: 'CCCD', number: '', issueDate: '', issuePlace: CV.CCCD_PLACE },
+      degrees: [], titles: [], languages: [], work: [], projects: [], pubs: [], awards: [],
+      extra: { aspirations: { giangDay: false, hoiDong: false, nghienCuu: false, huongDan: false, tuVan: false },
+        courses: [], directions: [], orcid: '', scopusId: '', scholar: '' }
+    };
+  };
+
+  /* ---------- Suy ra học vị / học hàm cao nhất ---------- */
+  CV.derive = function (P) {
+    var best = null, bt = null;
+    (P.degrees || []).forEach(function (d) {
+      var r = CV.DEG_RANK[d.degree] || 0;
+      if (!r) return;
+      if (!best || r > best.r || (r === best.r && num(d.year) > num(best.d.year))) best = { r: r, d: d };
+    });
+    (P.titles || []).forEach(function (t) {
+      var r = t.title === 'GS' ? 2 : t.title === 'PGS' ? 1 : 0;
+      if (!r) return;
+      if (!bt || r > bt.r || (r === bt.r && num(t.year) > num(bt.t.year))) bt = { r: r, t: t };
+    });
+    return {
+      degreeRank: best ? best.r : 0,
+      highestDegree: best ? best.d.degree : '',
+      highestDegreeYear: best ? s(best.d.year) : '',
+      highestDegreeCountry: best ? s(best.d.country) : '',
+      titleCode: bt ? bt.t.title : '',
+      highestTitle: bt ? (bt.t.title === 'GS' ? 'Giáo sư' : 'Phó giáo sư') : '',
+      titleYear: bt ? s(bt.t.year) : '',
+      titleMajor: bt ? s(bt.t.major) : ''
+    };
+  };
+
+  /* ---------- Định dạng ---------- */
+  function monthIdx(my) { // 'mm/yyyy' -> số tháng
+    var m = /^(\d{1,2})\/(\d{4})$/.exec(s(my)); if (!m) return null;
+    return num(m[2]) * 12 + num(m[1]) - 1;
+  }
+  CV.monthIdx = monthIdx;
+  CV.fmtPeriod = function (w) { return s(w.from) + ' – ' + (w.current ? 'nay' : s(w.to)); };
+  function fmtYears(p) {
+    return (s(p.startYear) || '…') + '/' + (p.ongoing ? 'đang thực hiện' : (s(p.endYear) || '…'));
+  }
+  CV.fmtYears = fmtYears;
+
+  /* ---------- Kiểm tra hợp lệ (chỉ cảnh báo, không chặn) ---------- */
+  CV.validate = function (P) {
+    var w = []; // {sec, msg}
+    function add(sec, msg) { w.push({ sec: sec, msg: msg }); }
+    var by = num((s(P.basic.dob).split('/')[2]) || '');
+    var degs = P.degrees || [];
+    var bach = degs.filter(function (d) { return d.degree === 'Cử nhân' || d.degree === 'Kỹ sư'; });
+    var primary = bach.filter(function (d) { return !d.second; });
+    var ms = degs.filter(function (d) { return d.degree === 'Thạc sĩ'; });
+    var phd = degs.filter(function (d) { return CV.DEG_RANK[d.degree] === 3; });
+    function minY(a) { var y = a.map(function (d) { return num(d.year); }).filter(Boolean); return y.length ? Math.min.apply(null, y) : 0; }
+    function maxY(a) { var y = a.map(function (d) { return num(d.year); }).filter(Boolean); return y.length ? Math.max.apply(null, y) : 0; }
+    if (minY(primary) && minY(ms) && minY(ms) < minY(primary)) add('degrees', 'Năm cấp bằng Thạc sĩ sớm hơn năm tốt nghiệp Đại học.');
+    if (minY(ms) && minY(phd) && minY(phd) < minY(ms)) add('degrees', 'Năm cấp bằng Tiến sĩ sớm hơn năm cấp bằng Thạc sĩ.');
+    if (minY(primary) && minY(phd) && minY(phd) < minY(primary)) add('degrees', 'Năm cấp bằng Tiến sĩ sớm hơn năm tốt nghiệp Đại học.');
+    var tmin = 9999; (P.titles || []).forEach(function (t) { if (num(t.year)) tmin = Math.min(tmin, num(t.year)); });
+    if (tmin < 9999 && maxY(phd) && tmin < minY(phd)) add('degrees', 'Năm phong/bổ nhiệm học hàm sớm hơn năm cấp bằng Tiến sĩ.');
+    if (by) degs.forEach(function (d) {
+      var y = num(d.year); if (y && y - by < 17) add('degrees', 'Năm ' + y + ' (' + d.degree + ') quá gần năm sinh ' + by + '.');
+    });
+    var seen = {};
+    degs.forEach(function (d) {
+      var k = [d.degree, CV.norm(d.major), CV.norm(d.institution), d.year].join('|');
+      if (seen[k]) add('degrees', 'Có thể ghi trùng học vị: ' + d.degree + ' – ' + s(d.major) + ' (' + s(d.year) + ').'); seen[k] = 1;
+    });
+    // công tác chồng nhau
+    var iv = (P.work || []).map(function (x) {
+      var a = monthIdx(x.from), b = x.current ? 99999 : monthIdx(x.to);
+      return { a: a, b: b == null ? a : b, x: x };
+    }).filter(function (o) { return o.a != null; }).sort(function (p, q) { return p.a - q.a; });
+    for (var i = 0; i < iv.length; i++) for (var j = i + 1; j < iv.length; j++) {
+      if (iv[j].a <= iv[i].b && iv[j].a < iv[i].b) { add('work', 'Hai giai đoạn công tác chồng nhau: "' + s(iv[i].x.org) + '" và "' + s(iv[j].x.org) + '".'); break; }
+    }
+    (P.work || []).forEach(function (x) {
+      var a = monthIdx(x.from), b = monthIdx(x.to);
+      if (a != null && b != null && !x.current && b < a) add('work', 'Giai đoạn "' + s(x.org) + '" có thời điểm kết thúc trước thời điểm bắt đầu.');
+    });
+    var sp = {};
+    (P.projects || []).forEach(function (p) {
+      var k = CV.norm(p.name) + '|' + p.startYear; if (sp[k]) add('projects', 'Có thể ghi trùng đề tài: ' + s(p.name)); sp[k] = 1;
+      if (num(p.startYear) && num(p.endYear) && num(p.endYear) < num(p.startYear)) add('projects', 'Đề tài "' + s(p.name) + '": năm hoàn thành trước năm bắt đầu.');
+    });
+    var pp = {};
+    (P.pubs || []).forEach(function (p) {
+      var k = s(p.doi) ? 'doi:' + s(p.doi).toLowerCase() : CV.norm(p.title) + '|' + p.year;
+      if (pp[k]) add('pubs', 'Có thể ghi trùng công bố: ' + s(p.title)); pp[k] = 1;
+    });
+    return w;
+  };
+
+  /* ---------- Cấu hình xuất ---------- */
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  CV.defaultConfig = function (template) {
+    template = template || 'BM04';
+    var c = {
+      template: template,
+      sections: { general: true, education: true, languages: true, work: true, projects: true, publications: true, awards: false, sign: true },
+      fields: { fullName: true, gender: true, dob: true, pob: true, hometown: true, ethnicity: true, highestDegree: true, degreeYearCountry: true,
+        title: true, titleYear: true, position: true, workplace: true, address: true, phones: true, fax: true, email: true, idDoc: true },
+      projectOpts: { internal: false },
+      pubOpts: { authors: false, boldMain: false, roles: false, indexClass: false, doi: false, order: 'desc' },
+      workOrder: 'asc', keepEmptyLines: true, place: '', date: '', signerName: false, emailChoice: 'contact'
+    };
+    if (template === 'BM04_FULL') {
+      c.sections.awards = true; c.pubOpts.authors = true; c.pubOpts.boldMain = true; c.pubOpts.roles = true;
+      c.pubOpts.indexClass = true; c.pubOpts.doi = true;
+    }
+    if (template === 'SUMMARY') { c.sections.sign = false; }
+    return c;
+  };
+  CV.mergeConfig = function (cfg) {
+    cfg = cfg || {};
+    var d = CV.defaultConfig(cfg.template), o = clone(d);
+    ['sections', 'fields', 'projectOpts', 'pubOpts'].forEach(function (k) {
+      var src = cfg[k] || {}; for (var x in o[k]) if (src[x] !== undefined) o[k][x] = (x === 'order') ? src[x] : !!src[x];
+    });
+    ['workOrder', 'place', 'date', 'emailChoice'].forEach(function (k) { if (cfg[k] !== undefined) o[k] = s(cfg[k]); });
+    ['keepEmptyLines', 'signerName'].forEach(function (k) { if (cfg[k] !== undefined) o[k] = !!cfg[k]; });
+    return o;
+  };
+
+  /* ---------- Khối dựng văn bản ---------- */
+  function T(t, b, i) { return { t: t, b: !!b, i: !!i }; }
+  function P_(runs, o) { o = o || {}; return { t: 'p', runs: runs, align: o.align || 'left', size: o.size, before: o.before, after: o.after, indent: o.indent, rule: o.rule }; }
+  function LV(label, value) { return [T(label + ': '), value ? T(value, true) : T(DOTS)]; }
+  /* Dòng nối tiếp (inline row): các mục nằm chung 1 dòng, có dấu chấm dẫn; stops = vị trí (0..1) nơi mục kế tiếp bắt đầu.
+     it = [nhãn, giá trị, 'plain'?]  ('plain' = không có dấu hai chấm sau nhãn, dùng cho "1. Tiếng Anh") */
+  function ROW(items, stops, o) {
+    items = items.filter(Boolean);
+    return { t: 'row', lead: (o && o.lead) || '', leadW: (o && o.leadW) || 0, items: items.map(function (it) { return { label: it[0], value: s(it[1]), plain: it[2] === 'plain' }; }), stops: (stops || []).slice(0, Math.max(0, items.length - 1)), after: o && o.after };
+  }
+  CV.itemText = function (it) { return it.label + (it.plain ? ' ' : ': ') + it.value; };
+  CV.effective = function (P) {
+    var D = CV.derive(P), B = P.basic || {};
+    return { degree: s(B.hvDegree) || D.highestDegree, year: s(B.hvYear) || D.highestDegreeYear, country: s(B.hvCountry) || D.highestDegreeCountry,
+      title: s(B.hvTitle) || D.highestTitle, titleYear: s(B.hvTitleYear) || D.titleYear };
+  };
+  function cell() { return { paras: Array.prototype.slice.call(arguments) }; }
+  function cellText(c) { // dùng cho test so sánh
+    if (typeof c === 'string') return c;
+    return c.paras.map(function (r) { return r.map(function (x) { return x.t; }).join(''); }).join('\n');
+  }
+  CV.cellText = cellText;
+  CV.blockText = function (blocks) {
+    var out = [];
+    blocks.forEach(function (b) {
+      if (b.t === 'p') out.push(b.runs.map(function (x) { return x.t; }).join(''));
+      else if (b.t === 'row') out.push((b.lead ? b.lead + ' ' : '') + b.items.map(CV.itemText).join(' | '));
+      else if (b.t === 'table') { out.push(b.head.join(' | ')); b.rows.forEach(function (r) { out.push(r.map(cellText).join(' | ')); }); }
+      else if (b.t === 'sign') { out.push(cellText(b.left)); out.push(cellText(b.right)); }
+    });
+    return out;
+  };
+  function sectionHead(text, sec) { var b = P_([T(text, true)], { before: 8, after: 2, size: 12.5 }); b.sec = sec || ''; return b; }
+  function subHead(text) { return P_([T(text, true)], { before: 4, after: 1 }); }
+
+  function sortWork(arr, order) {
+    var a = arr.slice().sort(function (p, q) { return (monthIdx(p.from) || 0) - (monthIdx(q.from) || 0); });
+    return order === 'desc' ? a.reverse() : a;
+  }
+
+  CV.buildModel = function (P, cfgIn) {
+    var cfg = CV.mergeConfig(cfgIn);
+    if (cfg.template === 'SUMMARY') return buildSummary(P, cfg);
+    var S = cfg.sections, F = cfg.fields, B = P.basic || {}, D = CV.derive(P), blocks = [];
+    var acc = (P.account && P.account.email) || '';
+
+    blocks.push(P_([T('BM04/QT03/ĐT', false, true)], { size: 10, after: 4 }));
+    blocks.push(P_([T('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', true)], { align: 'center', size: 12.5, after: 0 }));
+    var tl = P_([T('Độc lập – Tự do – Hạnh phúc', true)], { align: 'center', size: 12.5, after: 8 }); tl.rule = 0.36; blocks.push(tl);
+    blocks.push(P_([T('LÝ LỊCH KHOA HỌC', true)], { align: 'center', size: 15, after: 2 }));
+    blocks.push(P_([T('(Theo mẫu tại Thông tư số 08/2011/TT-BGDĐT ngày 17/02/2011 của Bộ trưởng Bộ GDĐT – Phụ lục V)', false, true)], { align: 'center', size: 10, after: 6 }));
+
+    /* I. Lý lịch sơ lược */
+    if (S.general) {
+      blocks.push(sectionHead('I. LÝ LỊCH SƠ LƯỢC', 'general'));
+      var email = (cfg.emailChoice === 'contact' && B.contactEmail && B.contactEmailVerified) ? B.contactEmail : acc;
+      var idLabel = P.idDoc.type === 'CMND' ? 'Số CMND' : P.idDoc.type === 'CCCD' ? 'Số CCCD' : 'Số thẻ căn cước';
+      var ph = [];
+      if (B.phoneCQ) ph.push('CQ: ' + B.phoneCQ); if (B.phoneNR) ph.push('NR: ' + B.phoneNR); if (B.phoneDD) ph.push('ĐĐ: ' + B.phoneDD);
+      var H = CV.effective(P);
+      var rows = [
+        [[F.fullName && ['Họ và tên', B.fullName], F.gender && ['Giới tính', B.gender]], [0.70]],
+        [[F.dob && ['Ngày, tháng, năm sinh', B.dob], F.pob && ['Nơi sinh', B.pob]], [0.48]],
+        [[F.hometown && ['Quê quán', B.hometown], F.ethnicity && ['Dân tộc', B.ethnicity]], [0.70]],
+        [[F.highestDegree && ['Học vị cao nhất', H.degree], F.degreeYearCountry && ['Năm, nước nhận học vị', [H.year, H.country].filter(Boolean).join(', ')]], [0.46]],
+        [[F.title && ['Chức danh khoa học cao nhất', H.title], F.titleYear && ['Năm bổ nhiệm', H.titleYear]], [0.70]],
+        [[F.position && ['Chức vụ (hiện tại hoặc trước khi nghỉ hưu)', B.position]], []],
+        [[F.workplace && ['Đơn vị công tác (hiện tại hoặc trước khi nghỉ hưu)', B.workplace]], []],
+        [[F.address && ['Chỗ ở riêng hoặc địa chỉ liên lạc', B.address]], []],
+        [F.phones ? [['Điện thoại liên hệ:  CQ', B.phoneCQ], ['NR', B.phoneNR], ['ĐĐ', B.phoneDD]] : [], [0.50, 0.75]],
+        [[F.fax && ['Fax', B.fax], F.email && ['E-mail', email]], [0.38]],
+        [F.idDoc ? [[idLabel, P.idDoc.number], ['Ngày cấp', P.idDoc.issueDate], ['Nơi cấp', P.idDoc.issuePlace]] : [], [0.40, 0.68]]
+      ];
+      rows.forEach(function (r) { var it = r[0].filter(Boolean); if (it.length) blocks.push(ROW(it, r[1], { after: 2 })); });
+    }
+
+    /* II. Đào tạo */
+    if (S.education) {
+      blocks.push(sectionHead('II. QUÁ TRÌNH ĐÀO TẠO', 'education'));
+      var degs = P.degrees || [];
+      var bach = degs.filter(function (d) { return d.level === 'Đại học'; });
+      var prim = bach.filter(function (d) { return !d.second; }).sort(function (a, b) { return num(a.year) - num(b.year); });
+      var sec = bach.filter(function (d) { return d.second; });
+      var ms = degs.filter(function (d) { return d.degree === 'Thạc sĩ'; });
+      var phd = degs.filter(function (d) { return CV.DEG_RANK[d.degree] === 3; });
+      blocks.push(subHead('1. Đại học:'));
+      var pr = prim.length ? prim : (cfg.keepEmptyLines ? [{}] : []);
+      pr.forEach(function (d) {
+        blocks.push(ROW([['Hệ đào tạo', d.system]], [], { after: 1 }));
+        blocks.push(ROW([['Nơi đào tạo', d.institution]], [], { after: 1 }));
+        blocks.push(ROW([['Ngành học', d.major]], [], { after: 1 }));
+        blocks.push(ROW([['Nước đào tạo', d.country], ['Năm tốt nghiệp', s(d.year)]], [0.62], { after: 1 }));
+      });
+      var sc = sec.length ? sec : (cfg.keepEmptyLines ? [{}] : []);
+      sc.forEach(function (d) {
+        blocks.push(ROW([['Bằng đại học 2', [d.major, d.institution].filter(Boolean).join(' – ')], ['Năm tốt nghiệp', s(d.year)]], [0.62], { after: 1 }));
+      });
+      blocks.push(subHead('2. Sau đại học'));
+      var ml = ms.length ? ms : (cfg.keepEmptyLines ? [{}] : []);
+      ml.forEach(function (d) {
+        blocks.push(ROW([['- Thạc sĩ chuyên ngành', d.major], ['Năm cấp bằng', s(d.year)]], [0.62], { after: 1 }));
+        blocks.push(ROW([['  Nơi đào tạo', d.institution]], [], { after: 1 }));
+      });
+      var pl = phd.length ? phd : (cfg.keepEmptyLines ? [{}] : []);
+      pl.forEach(function (d) {
+        blocks.push(ROW([['- Tiến sĩ chuyên ngành', d.major], ['Năm cấp bằng', s(d.year)]], [0.62], { after: 1 }));
+        blocks.push(ROW([['  Nơi đào tạo', d.institution]], [], { after: 1 }));
+        blocks.push(ROW([['- Tên luận án', d.thesis]], [], { after: 1 }));
+      });
+    }
+    if (S.languages) {
+      if (!S.education) blocks.push(sectionHead('II. QUÁ TRÌNH ĐÀO TẠO', 'languages'));
+      var L = (P.languages || []).slice(), n = Math.max(3, L.length);
+      for (var i = 0; i < n; i++) {
+        var l = L[i] || {};
+        var name = s(l.language) + (s(l.certificate) ? ' (' + s(l.certificate) + ')' : '');
+        blocks.push(ROW([[(i + 1) + '.', name, 'plain'], ['Mức độ sử dụng', l.level]], [0.62], { after: 1, lead: i === 0 ? '3. Ngoại ngữ:' : '', leadW: 0.2 }));
+      }
+    }
+
+    /* III. Công tác */
+    if (S.work) {
+      blocks.push(sectionHead('III. QUÁ TRÌNH CÔNG TÁC CHUYÊN MÔN', 'work'));
+      var wk = sortWork(P.work || [], cfg.workOrder);
+      var wr = wk.map(function (w) { return [CV.fmtPeriod(w), s(w.org) + (s(w.position) ? ' – ' + s(w.position) : ''), s(w.duties)]; });
+      if (!wr.length) wr = [['', '', '']];
+      blocks.push({ t: 'table', widths: [20, 40, 40], head: ['Thời gian', 'Nơi công tác', 'Công việc đảm nhiệm'], rows: wr, center: [] });
+    }
+
+    /* IV. Nghiên cứu */
+    if (S.projects || S.publications) blocks.push(sectionHead('IV. QUÁ TRÌNH NGHIÊN CỨU KHOA HỌC', S.projects ? 'projects' : 'publications'));
+    if (S.projects) {
+      blocks.push(subHead('1. Các đề tài nghiên cứu khoa học đã và đang tham gia:'));
+      var inter = cfg.projectOpts.internal;
+      var head = ['TT', 'Tên đề tài nghiên cứu', 'Năm bắt đầu/Năm hoàn thành', 'Đề tài cấp (NN, Bộ, ngành, trường)', 'Trách nhiệm tham gia trong đề tài'];
+      var widths = [6, 34, 17, 20, 23];
+      if (inter) { head = head.concat(['Mã số', 'Kết quả nghiệm thu', 'Kinh phí']); widths = [5, 24, 12, 13, 14, 8, 14, 10]; }
+      var pj = (P.projects || []).slice().sort(function (a, b) { return num(b.startYear) - num(a.startYear); });
+      var prow = pj.map(function (p, k) {
+        var r = [String(k + 1), s(p.name), fmtYears(p), s(p.level), s(p.role)];
+        if (inter) r = r.concat([s(p.code), s(p.result), s(p.funding)]);
+        return r;
+      });
+      if (!prow.length) prow = [head.map(function () { return ''; })];
+      blocks.push({ t: 'table', widths: widths, head: head, rows: prow, center: [0, 2] });
+    }
+    if (S.publications) {
+      var sh2 = subHead('2. Các công trình khoa học đã công bố:'); sh2.sec = 'publications'; blocks.push(sh2);
+      var po = cfg.pubOpts;
+      var pubs = (P.pubs || []).slice().sort(function (a, b) { return po.order === 'asc' ? num(a.year) - num(b.year) : num(b.year) - num(a.year); });
+      var rowsP = pubs.map(function (p, k) {
+        var paras = [[T(s(p.title) + (po.indexClass && p.indexClass ? ' [' + CV.INDEX_CLASS[p.indexClass] + ']' : ''))]];
+        if (po.authors && p.authors && p.authors.length) {
+          var runs = [];
+          p.authors.forEach(function (a, ix) {
+            if (ix) runs.push(T(', ', false, true));
+            runs.push(T(s(a.name), po.boldMain && a.main, true));
+          });
+          paras.push(runs);
+        }
+        if (po.roles) {
+          var me = (p.authors || []).filter(function (a) { return a.me; })[0];
+          var rl = []; if (me && me.main) rl.push('tác giả chính'); if (me && me.corr) rl.push('tác giả liên hệ');
+          if (rl.length) paras.push([T('Vai trò: ' + rl.join(', '), false, true)]);
+        }
+        return [String(k + 1), { paras: paras }, s(p.year), pubVenue(p, po)];
+      });
+      if (!rowsP.length) rowsP = [['', '', '', '']];
+      blocks.push({ t: 'table', widths: [6, 46, 12, 36], head: ['TT', 'Tên công trình', 'Năm công bố', 'Tên tạp chí'], rows: rowsP, center: [0, 2] });
+    }
+
+    /* V. Mục phụ */
+    if (S.awards) {
+      blocks.push(sectionHead('V. GIẢI THƯỞNG, SÁNG CHẾ VÀ CHUYỂN GIAO CÔNG NGHỆ', 'awards'));
+      var aw = (P.awards || []).slice().sort(function (a, b) { return num(b.year) - num(a.year); });
+      var ar = aw.map(function (a, k) { return [String(k + 1), CV.AWARD_KIND[a.kind] || '', s(a.name) + (s(a.content) ? ' — ' + s(a.content) : ''), s(a.issuer), s(a.year)]; });
+      if (!ar.length) ar = [['', '', '', '', '']];
+      blocks.push({ t: 'table', widths: [6, 16, 40, 26, 12], head: ['TT', 'Loại', 'Tên / nội dung', 'Cơ quan cấp / đối tác', 'Năm'], rows: ar, center: [0, 4] });
+    }
+
+    /* Chân mẫu */
+    if (S.sign) {
+      var place = s(cfg.place), dt = s(cfg.date);
+      var dateLine = (place || '…………') + ', ' + (dt ? 'ngày ' + dt : 'ngày … tháng … năm 20…');
+      var rightParas = [[T(dateLine, false, true)], [T('Người khai ký tên', true)], [T('(Ghi rõ chức danh, học vị)', false, true)], [T(' ')], [T(' ')]];
+      if (cfg.signerName && B.fullName) rightParas.push([T(B.fullName, true)]);
+      blocks.push({ t: 'sign', sec: 'sign', left: cell([T('Xác nhận của cơ quan', true)], [T(' ')], [T(' ')], [T(' ')]), right: { paras: rightParas } });
+    }
+    return blocks;
+  };
+
+  function pubVenue(p, po) {
+    var out = '';
+    if (p.type === 'book') {
+      out = s(p.publisher);
+      if (s(p.isbn)) out += (out ? '. ' : '') + 'ISBN: ' + s(p.isbn);
+      if (s(p.registrationNo)) out += (out ? '. ' : '') + 'Số xác nhận ĐKXB: ' + s(p.registrationNo);
+      if (s(p.bookRole)) out += (out ? ' ' : '') + '(' + s(p.bookRole) + ')';
+    } else {
+      out = s(p.venue);
+      if (s(p.volume)) out += ', ' + s(p.volume);
+      if (s(p.issue)) out += '(' + s(p.issue) + ')';
+      if (s(p.pages)) out += (p.type === 'conference' ? ', tr. ' : ': ') + s(p.pages);
+      if (p.type === 'conference' && s(p.publisher)) out += '. ' + s(p.publisher);
+      if (s(p.issn)) out += '. ISSN: ' + s(p.issn);
+      if (s(p.isbn) && p.type === 'conference') out += '. ISBN: ' + s(p.isbn);
+    }
+    if (po && po.doi && s(p.doi)) out += '. DOI: ' + s(p.doi);
+    return out;
+  }
+
+  function buildSummary(P, cfg) {
+    var B = P.basic || {}, H = CV.effective(P), D = { highestTitle: H.title, highestDegree: H.degree }, b = [];
+    var email = (B.contactEmail && B.contactEmailVerified) ? B.contactEmail : ((P.account && P.account.email) || '');
+    b.push(P_([T('LÝ LỊCH KHOA HỌC TÓM TẮT', true)], { align: 'center', size: 15, after: 6 }));
+    b.push(P_([T(s(B.fullName) || DOTS, true)], { size: 14, after: 1 }));
+    b.push(P_([T([D.highestTitle, D.highestDegree].filter(Boolean).join(', '))], { after: 1 }));
+    b.push(P_([T([B.position, B.workplace].filter(Boolean).join(' – '))], { after: 1 }));
+    b.push(P_([T([email, B.phoneDD].filter(Boolean).join('  |  '))], { after: 1 }));
+    var ex = P.extra || {}, ids = [];
+    if (ex.orcid) ids.push('ORCID: ' + ex.orcid); if (ex.scopusId) ids.push('Scopus ID: ' + ex.scopusId); if (ex.scholar) ids.push('Google Scholar: ' + ex.scholar);
+    if (ids.length) b.push(P_([T(ids.join('  |  '), false, true)], { size: 10.5 }));
+    if ((ex.directions || []).length) {
+      b.push(sectionHead('HƯỚNG NGHIÊN CỨU'));
+      ex.directions.forEach(function (d) { b.push(P_([T('• ' + s(d.name)), d.keywords ? T(' (' + s(d.keywords) + ')', false, true) : T('')], { after: 1 })); });
+    }
+    if ((P.degrees || []).length) {
+      b.push(sectionHead('HỌC VẤN'));
+      P.degrees.slice().sort(function (a, c) { return num(c.year) - num(a.year); }).forEach(function (d) {
+        b.push(P_([T('• ' + s(d.degree) + ', ' + s(d.major) + ', ' + s(d.institution) + (s(d.country) ? ', ' + s(d.country) : '') + ' (' + s(d.year) + ')')], { after: 1 }));
+      });
+    }
+    var wk = sortWork(P.work || [], 'desc').slice(0, 6);
+    if (wk.length) {
+      b.push(sectionHead('KINH NGHIỆM CÔNG TÁC'));
+      wk.forEach(function (w) { b.push(P_([T('• ' + CV.fmtPeriod(w) + ': ' + s(w.org) + (s(w.position) ? ', ' + s(w.position) : ''))], { after: 1 })); });
+    }
+    var pj = (P.projects || []).slice().sort(function (a, c) { return (CV.ROLES.indexOf(a.role) - CV.ROLES.indexOf(c.role)) || (num(c.startYear) - num(a.startYear)); }).slice(0, 8);
+    if (pj.length) {
+      b.push(sectionHead('ĐỀ TÀI TIÊU BIỂU'));
+      pj.forEach(function (p) { b.push(P_([T('• ' + s(p.name) + ' (' + fmtYears(p) + '; ' + s(p.level) + '; ' + s(p.role) + ')')], { after: 1 })); });
+    }
+    var pb = (P.pubs || []).slice().sort(function (a, c) { return num(c.year) - num(a.year); }).slice(0, 15);
+    if (pb.length) {
+      b.push(sectionHead('CÔNG BỐ TIÊU BIỂU'));
+      pb.forEach(function (p) { b.push(P_([T('• ' + s(p.title) + '. ' + pubVenue(p, { doi: true }) + ' (' + s(p.year) + ')' + (p.indexClass ? ' [' + CV.INDEX_CLASS[p.indexClass] + ']' : ''))], { after: 1 })); });
+    }
+    return b;
+  }
+
+  root.CV = CV;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>

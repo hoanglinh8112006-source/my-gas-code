@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light only">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><?= appName ?></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <?!= include('Style'); ?>
+  <?!= include('Login'); ?>
+</head>
+<body>
+  <div id="boot" class="boot"><div class="spinner"></div><p>Đang tải hồ sơ…</p></div>
+  <div id="login" hidden></div>
+  <div id="app" hidden></div>
+  <div id="modalRoot"></div>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="dl"></div>
+  <script>var BOOT = <?!= bootJson ?>;</script>
+  <?!= include('Matter'); ?>
+  <?!= include('Geo'); ?>
+  <?!= include('Model'); ?>
+  <?!= include('Core'); ?>
+  <?!= include('UserPages'); ?>
+  <?!= include('ImportPage'); ?>
+  <?!= include('AdminPages'); ?>
+  <script>boot();</script>
+</body>
+</html>

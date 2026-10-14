@@ -1,0 +1,167 @@
+<style>
+/* Màn hình đăng nhập theo bản thiết kế: nền trắng bên trái, mảng xanh trời bên phải (có các viên pill rơi). Chỉ chuyển động transform/opacity, tắt khi giảm chuyển động. */
+.login{--navy:#0b2f6b;--blue:#1a8cff;--sky:#cde8fd;--pink:#f7a1a6;--bd:#a8a8a8;--err:#b42318;position:relative;min-height:100dvh;overflow:hidden;background:#fff;color:var(--navy);font-family:var(--font-sans,"Be Vietnam Pro",system-ui,sans-serif);color-scheme:light}
+.login-main{position:relative;z-index:3;width:min(100%,52vw);min-height:100dvh;padding:clamp(40px,9.5vh,96px) clamp(24px,7.6vw,110px) 40px;pointer-events:none}
+.login-main>*{pointer-events:auto}
+.login-brand{display:flex;align-items:center;gap:16px;margin:0 0 4vh;font-size:clamp(14px,1.25vw,17px);line-height:1.4}
+.login-brand svg{flex:none;width:52px;height:52px}
+.title-wrap{position:relative;display:inline-block}
+.login h1{margin:0;font-size:clamp(3.1rem,6vw,5.6rem);line-height:1.14;letter-spacing:-.012em;font-weight:600;color:var(--navy)}
+.spark{position:absolute;left:73%;top:0;width:19%;min-width:56px;pointer-events:none}.login-lead{margin:2vh 0 3.4vh;font-size:clamp(1.2rem,1.5vw,1.3rem);font-weight:400;letter-spacing:.07em;color:var(--blue)}
+.login-form{width:min(100%,30vw);min-width:min(100%,320px)}
+.l-input{display:block;width:100%;min-height:58px;padding:0 40px;font:inherit;font-size:1.0625rem;color:var(--navy);background:#fff;border:2px solid var(--bd);border-radius:999px;transition:border-color .2s}
+.l-input::placeholder{color:#777}.l-input:focus{border-color:var(--blue);outline:none}
+.l-input[aria-invalid=true]{border-color:var(--err)}
+.l-error{min-height:22px;margin:8px 20px 0;font-size:13.5px;color:var(--err)}
+.l-btn{position:relative;display:inline-flex;align-items:center;gap:12px;margin-top:10px;padding:0 34px;min-height:60px;font:inherit;font-size:1.25rem;font-weight:600;color:#111;background:transparent;border:0;cursor:pointer;transition:transform .3s cubic-bezier(.16,1,.3,1)}
+.l-btn::before,.l-btn::after{content:"";position:absolute;z-index:-1;clip-path:polygon(0 0,100% 0,96% 12%,100% 25%,96% 37%,100% 50%,96% 62%,100% 75%,96% 87%,100% 100%,0 100%,4% 87%,0 75%,4% 62%,0 50%,4% 37%,0 25%,4% 12%)}
+.l-btn::before{inset:0;background:#a9c8f5}.l-btn::after{inset:2px;background:#fff}
+.l-btn:hover{transform:translateY(-2px)}.l-btn:active{transform:scale(.98)}.l-btn:disabled{opacity:.65;cursor:progress}
+.l-btn svg{width:28px;height:28px}
+.login :focus-visible{outline:2px solid var(--blue);outline-offset:4px}
+.login-stage{position:absolute;top:0;right:0;bottom:0;left:48%;z-index:1}
+.blob{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.blob path{fill:var(--sky)}
+.blob-w path{fill:#fff}
+.blob-w{filter:drop-shadow(13px 0 24px rgb(11 47 107 / .20))}
+.squiggle{position:absolute;right:5%;top:3%;width:17%;pointer-events:none}
+.stage-sheet{position:absolute;left:52%;top:10%;transform:translateX(-50%)}
+.stage-tilt{transform:rotate(-8deg);transform-origin:50% 0;transition:transform .6s cubic-bezier(.16,1,.3,1)}
+.login-stage:hover .stage-tilt{transform:rotate(-7deg) translateY(-6px)}
+.stage-fit{width:794px;height:1123px;transform-origin:0 0;background:#fff;box-shadow:13px 12px 30px -8px rgb(11 47 107 / .30);pointer-events:none;user-select:none}
+.paper{width:794px;height:1123px;background:#fff;padding:56px 64px;font-family:"Times New Roman",Times,serif;font-size:17.3px;line-height:1.4;color:#111}
+.paper .c{text-align:center;font-weight:700}.paper .u{text-decoration:underline;text-underline-offset:4px;width:max-content;margin:0 auto}
+.paper .t{text-align:center;font-weight:700;font-size:21px;margin:14px 0 4px}.paper .i{text-align:center;font-style:italic;font-size:14px}
+.paper .h{font-weight:700;margin:16px 0 6px}.paper .pair{display:grid;grid-template-columns:1.15fr 1fr;gap:0 18px}
+.paper .r{display:flex;align-items:flex-end;gap:4px;margin:0 0 3px}.paper .r i{flex:1;border-bottom:1.5px dotted #333;margin-bottom:5px}
+.pen{position:absolute;left:53%;top:73%;width:11%;min-width:60px;transform:translate(-50%,-100%) rotate(40deg);transform-origin:50% 100%;pointer-events:none;filter:drop-shadow(0 14px 14px rgb(11 47 107/.25))}
+.layer{position:absolute;inset:0;z-index:4;pointer-events:auto}
+.pill{position:absolute;left:0;top:0;padding:13px 24px;border-radius:999px;white-space:nowrap;user-select:none;touch-action:none;cursor:grab;font:500 16px/1 var(--font-sans,"Be Vietnam Pro",sans-serif);border:1px solid transparent;box-shadow:0 10px 20px -10px rgb(11 47 107/.45)}
+.pill:active{cursor:grabbing}
+@media(max-width:899px){.spark{display:block;left:72%;top:0;width:20%}}
+.pill.navy{background:var(--navy);color:#fff}.pill.blue{background:var(--blue);color:#fff}.pill.pink{background:var(--pink);color:var(--navy)}.pill.white{background:#fff;color:var(--navy);border-color:#b8d4f2}
+@media(max-width:899px){.login-main{width:100%;padding:28px 24px 40px}.login-stage{display:none}.login-form{width:100%}.spark{display:none}}
+@media (prefers-reduced-motion:no-preference){
+  .spark path{ stroke-dasharray:50; stroke-dashoffset:50; animation: l-draw .5s ease-out forwards; }
+  .spark path:nth-child(2){ animation-delay:.08s } .spark path:nth-child(3){ animation-delay:.16s } .spark path:nth-child(4){ animation-delay:.24s }
+}
+@keyframes l-draw{ to{ stroke-dashoffset:0 } }
+@media(prefers-reduced-motion:no-preference){.login-main>*{animation:l-rise .7s cubic-bezier(.16,1,.3,1) both}.login-main>:nth-child(2){animation-delay:.07s}.login-main>:nth-child(3){animation-delay:.14s}.login-main>:nth-child(4){animation-delay:.21s}.stage-sheet{animation:l-sheet 1s cubic-bezier(.16,1,.3,1) .1s both}.pen{animation:l-fade .8s ease .5s both}}
+@media(prefers-reduced-motion:reduce){.stage-tilt{transition:none}}
+@keyframes l-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes l-sheet{from{opacity:0;transform:translateX(-50%) translateY(36px)}to{opacity:1;transform:translateX(-50%)}}
+@keyframes l-fade{from{opacity:0}to{opacity:1}}
+
+/* Chọn vai trò: hai viên pill nhỏ cùng ngôn ngữ với các pill rơi */
+.l-roles{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px;padding:0;border:0}
+.l-role{padding:11px 20px;border-radius:999px;font:500 15px/1 var(--font-sans,"Be Vietnam Pro",sans-serif);cursor:pointer;color:var(--navy);background:#fff;border:1.5px solid #b8d4f2;transition:background-color .25s,color .25s,border-color .25s,transform .25s cubic-bezier(.16,1,.3,1)}
+.l-role:hover{border-color:var(--blue)}
+.l-role:active{transform:scale(.97)}
+.l-role[aria-checked=true]{background:var(--navy);color:#fff;border-color:var(--navy)}
+.l-note{color:#0b4a45}
+.l-hint{min-height:20px;margin:8px 20px 0;font-size:13.5px;color:#4b5b75}
+.l-input[readonly]{background:#f3f7fc}
+@media(max-width:899px){.login h1{font-size:clamp(2.6rem,13vw,4rem)}}
+</style>
+<script>
+/* ===== Đăng nhập theo bản thiết kế: vai trò + email (gợi ý tài khoản Google) + nút Google; các viên pill rơi bằng matter-js ===== */
+var L = { role: 'user', info: null, busy: false, err: '', note: '', dispose: null };
+function lsGet(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+function lsSet(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) { } }
+var LROLES = [['user', 'Nhà khoa học'], ['admin', 'Quản trị đơn vị']];
+var LPILLS = [['Lý lịch sơ lược', 'navy'], ['Đào tạo', 'pink'], ['Công tác', 'white'], ['Nghiên cứu', 'blue'], ['Công trình', 'white'], ['Xuất Word', 'navy'], ['BM04', 'pink']];
+var G_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+var lrow = function (l) { return '<div class="r"><span>' + l + '</span><i></i></div>'; };
+var lrows = function (a) { return a.map(lrow).join(''); };
+
+function loginTemplate() {
+  return '<div class="login"><div class="login-main">' +
+    '<p class="login-brand"><svg viewBox="0 0 52 52" fill="none" stroke="#0b2f6b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 17l11 9 11-9M15 26l11 9 11-9"/></svg><span>Theo mẫu BM04<br>(Thông tư 08/2011/TT-BGDĐT)</span></p>' +
+    '<div class="title-wrap"><h1>Lý lịch<br>khoa học</h1><svg class="spark" viewBox="0 0 152 140" fill="none" stroke="#f7a1a6" stroke-width="10" stroke-linecap="round" aria-hidden="true"><path d="M45.9 64.5L62 41.5"/><path d="M72.5 73.3L105.6 47.4"/><path d="M97.8 94.4L122.2 85.5"/><path d="M107.6 120.6L145.5 117.3"/></svg></div>' +
+    '<p class="login-lead">Tự động nhập hồ sơ</p>' +
+    '<form class="login-form" id="login-form" novalidate>' +
+    '<div class="l-roles" role="radiogroup" aria-label="Vai trò đăng nhập">' + LROLES.map(function (r) { return '<button type="button" class="l-role" role="radio" data-role="' + r[0] + '">' + r[1] + '</button>'; }).join('') + '</div>' +
+    '<input class="l-input" id="login-email" type="email" placeholder="Nhập Email của bạn" autocomplete="email" aria-label="Email" aria-describedby="lgMsg">' +
+    '<p class="l-error" id="lgMsg" role="alert"></p>' +
+    '<button class="l-btn" id="lgGo" type="submit" disabled><span id="lgGoTx">Đăng nhập</span>' + G_LOGO + '</button>' +
+    '<p class="l-hint" id="lgHint" aria-live="polite"></p></form></div>' +
+    '<div class="login-stage" id="login-stage"><svg class="blob" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M0 0C-20 33 40 67 0 100L100 100L100 0Z"/></svg>' +
+    '<svg class="blob blob-w" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M-100 0L0 0C-20 33 40 67 0 100L-100 100Z"/></svg>' +
+    '<svg class="squiggle" viewBox="0 0 130 70" fill="none" stroke="#4aa3f0" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 6C30-6 56 24 36 38C20 48 8 32 25 28C42 24 70 54 124 34"/><ellipse cx="62" cy="40" rx="9" ry="6" transform="rotate(-20 62 40)"/></svg>' +
+    '<div class="stage-sheet" id="login-sheet"><div class="stage-tilt"><div class="stage-fit" id="login-fit"><div class="paper">' +
+    '<div class="c">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div><div class="c u">Độc lập – Tự do – Hạnh phúc</div><div class="t">LÝ LỊCH KHOA HỌC</div>' +
+    '<div class="i">(Theo mẫu tại Thông tư số 08/2011/TT-BGDĐT ngày 17/02/2011 của Bộ trưởng Bộ GDĐT – Phụ lục V)</div><div class="h">I. LÝ LỊCH SƠ LƯỢC</div>' +
+    '<div class="pair">' + lrows(['Họ và tên:', 'Giới tính:', 'Ngày, tháng, năm sinh:', 'Nơi sinh:', 'Quê quán:', 'Dân tộc:', 'Học vị cao nhất:', 'Năm, nước nhận học vị:']) + '</div>' +
+    lrows(['Chức danh khoa học cao nhất:', 'Chức vụ (hiện tại hoặc trước khi nghỉ hưu):', 'Đơn vị công tác (hiện tại hoặc trước khi nghỉ hưu):', 'Chỗ ở riêng hoặc địa chỉ liên lạc:', 'Điện thoại liên hệ:', 'Số CMND:']) +
+    '<div class="h">II. QUÁ TRÌNH ĐÀO TẠO</div><div class="h" style="margin:4px 0">1. Đại học:</div>' + lrows(['Hệ đào tạo:', 'Nơi đào tạo:', 'Ngành học:', 'Nước đào tạo:', 'Bằng đại học 2:']) +
+    '<div class="h" style="margin:4px 0">2. Sau đại học</div>' + lrows(['- Thạc sĩ chuyên ngành:', 'Nơi đào tạo:', '- Tiến sĩ chuyên ngành:', 'Nơi đào tạo:', '- Tên luận án:']) +
+    '</div></div></div></div>' +
+    '<svg class="pen" viewBox="0 0 100 330" aria-hidden="true"><rect x="22" y="40" width="56" height="210" rx="14" fill="#f4a0a4"/><rect x="31" y="52" width="9" height="180" rx="4.5" fill="#fbc9cb" opacity=".85"/><rect x="18" y="4" width="64" height="62" rx="18" fill="#f08e93"/><rect x="6" y="22" width="14" height="40" rx="6" fill="#f08e93"/><path d="M22 250h56L50 312z" fill="#f2cfa5"/><path d="M42 296h16L50 314z" fill="#5a2e2a"/></svg>' +
+    '</div></div>';
+}
+
+/* Các viên pill rơi trong mảng xanh (matter-js); trả về hàm dọn dẹp */
+function mountPills(stage) {
+  var noop = function () { };
+  if (!window.Matter || matchMedia('(prefers-reduced-motion: reduce)').matches || matchMedia('(max-width: 899px)').matches) return noop;
+  var M = window.Matter, Engine = M.Engine, Runner = M.Runner, Bodies = M.Bodies, Composite = M.Composite, Mouse = M.Mouse, MouseConstraint = M.MouseConstraint, Events = M.Events;
+  var layer = document.createElement('div'); layer.className = 'layer'; layer.setAttribute('aria-hidden', 'true'); stage.appendChild(layer);
+  var W = layer.clientWidth, H = layer.clientHeight, engine = Engine.create();
+  var wall = function (x, y, w, h) { return Bodies.rectangle(x, y, w, h, { isStatic: true }); };
+  Composite.add(engine.world, [wall(W / 2, H + 30, W * 2, 60), wall(W * 0.15 - 30, H / 2, 60, H * 4), wall(W + 30, H / 2, 60, H * 4)]);
+  var items = LPILLS.map(function (p, i) {
+    var el = document.createElement('div'); el.className = 'pill ' + p[1]; el.textContent = p[0]; layer.appendChild(el);
+    var w = el.offsetWidth, h = el.offsetHeight;
+    var body = Bodies.rectangle(W * (0.25 + Math.random() * 0.65), -h - i * 100, w, h, { chamfer: { radius: h / 2 }, restitution: 0.25, friction: 0.5, angle: (Math.random() - 0.5) * 0.6 });
+    Composite.add(engine.world, body); return { el: el, body: body, w: w, h: h };
+  });
+  var mouse = Mouse.create(layer);
+  mouse.element.removeEventListener('mousewheel', mouse.mousewheel); mouse.element.removeEventListener('DOMMouseScroll', mouse.mousewheel);
+  Composite.add(engine.world, MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.2, render: { visible: false } } }));
+  Events.on(engine, 'afterUpdate', function () { items.forEach(function (it) { it.el.style.transform = 'translate(' + (it.body.position.x - it.w / 2) + 'px, ' + (it.body.position.y - it.h / 2) + 'px) rotate(' + it.body.angle + 'rad)'; }); });
+  var runner = Runner.create(), t = setTimeout(function () { Runner.run(runner, engine); }, 700);
+  return function () { clearTimeout(t); Runner.stop(runner); Engine.clear(engine); layer.remove(); };
+}
+
+function hideLogin() { if (L.dispose) { L.dispose(); L.dispose = null; } var el = $('#login'); if (el) { el.hidden = true; el.innerHTML = ''; } }
+function showLogin(err, note) {
+  hideLogin(); L.err = err || ''; L.note = note || ''; L.busy = false; L.info = null;
+  var b = $('#boot'); if (b) b.remove();
+  $('#app').hidden = true; $('#app').innerHTML = '';
+  var root = $('#login'); root.hidden = false; root.innerHTML = loginTemplate();
+  L.role = lsGet('llkh_role') === 'admin' ? 'admin' : 'user';
+  var stage = $('#login-stage'), fit = $('#login-fit'), sheet = $('#login-sheet');
+  var fitPaper = function () { var s = stage.clientWidth * 0.63 / 794; fit.style.transform = 'scale(' + s + ')'; sheet.style.width = 794 * s + 'px'; };
+  fitPaper();
+  var disposePills = mountPills(stage), rt;
+  var onResize = function () { clearTimeout(rt); rt = setTimeout(function () { fitPaper(); disposePills(); disposePills = mountPills(stage); }, 250); };
+  addEventListener('resize', onResize);
+  L.dispose = function () { clearTimeout(rt); removeEventListener('resize', onResize); disposePills(); };
+  $$('.l-role', root).forEach(function (n) { n.addEventListener('click', function () { L.role = n.dataset.role; lsSet('llkh_role', L.role); paintLogin(); }); });
+  $('#login-email').addEventListener('input', function () { this.removeAttribute('aria-invalid'); L.err = ''; paintLogin(); });
+  $('#login-form').addEventListener('submit', function (e) { e.preventDefault(); loginGo(); });
+  paintLogin();
+  rpc('apiAuthInfo').then(function (info) { L.info = info; if (info.mode === 'session') { var em = $('#login-email'); em.value = info.email; em.readOnly = true; } paintLogin(); }).catch(function (e) { L.err = e.message; paintLogin(); });
+}
+function paintLogin() {
+  var root = $('#login'); if (!root || root.hidden) return;
+  $$('.l-role', root).forEach(function (n) { n.setAttribute('aria-checked', n.dataset.role === L.role ? 'true' : 'false'); });
+  var info = L.info, m = $('#lgMsg'); m.textContent = L.err || L.note; m.className = 'l-error' + (!L.err && L.note ? ' l-note' : '');
+  $('#lgGo').disabled = L.busy || !info || info.mode === 'unconfigured';
+  $('#lgGoTx').textContent = L.busy ? 'Đang xử lý…' : 'Đăng nhập';
+  var h = $('#lgHint');
+  if (!info) h.textContent = '';
+  else if (info.mode === 'session') h.textContent = 'Đăng nhập bằng tài khoản Google của tổ chức.';
+  else if (info.mode === 'unconfigured') h.textContent = 'Quản trị hệ thống chưa cấu hình đăng nhập Google (xem README, mục Đăng nhập).';
+  else h.textContent = 'Email chỉ để gợi ý tài khoản Google; để trống nếu muốn chọn tài khoản khác.';
+}
+function loginGo() {
+  if (L.busy || !L.info) return;
+  var email = $('#login-email').value.trim();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('#login-email').setAttribute('aria-invalid', 'true'); L.err = 'Email chưa đúng định dạng, ví dụ ten@truong.edu.vn.'; paintLogin(); $('#login-email').focus(); return; }
+  L.busy = true; L.err = ''; L.note = ''; paintLogin();
+  var p = L.info.mode === 'oauth' ? rpc('apiAuthUrl', L.role, email).then(function (d) { window.top.location.href = d.url; })
+    : rpc('apiLogin', L.role).then(function (d) { S.token = d.token; lsSet('llkh_tok', d.token); return enterApp(); });
+  p.catch(function (e) { L.busy = false; L.err = e.message; paintLogin(); });
+}
+</script>

@@ -1,0 +1,422 @@
+<script>
+/* =====================  CÁC TRANG CỦA NHÀ KHOA HỌC  ===================== */
+function head(title, desc, right) { return '<div class="page-head"><div><h1>' + esc(title) + '</h1>' + (desc ? '<p>' + desc + '</p>' : '') + '</div><div>' + (right || '') + '</div></div>'; }
+function warnBox(sec) {
+  var w = CV.validate(S.profile).filter(function (x) { return x.sec === sec; });
+  return w.length ? '<div class="alert warn"><b>Gợi ý kiểm tra (không bắt buộc sửa):</b><ul style="margin:4px 0 0 18px;padding:0">' + w.map(function (x) { return '<li>' + esc(x.msg) + '</li>'; }).join('') + '</ul></div>' : '';
+}
+function actionBtns(act, id) { return '<button class="btn sm" data-act="' + act + '_edit" data-id="' + id + '">Sửa</button> <button class="btn sm danger" data-act="' + act + '_del" data-id="' + id + '">Xoá</button>'; }
+function findById(arr, id) { return arr.filter(function (x) { return x.id === id; })[0]; }
+function upsert(arrKey, rec) {
+  var arr = S.profile[arrKey], i = arr.map(function (x) { return x.id; }).indexOf(rec.id);
+  if (i >= 0) arr[i] = rec; else arr.push(rec);
+  markDirty(); render();
+}
+function delItem(arrKey, id, what) {
+  confirmBox('Xoá ' + what, 'Bạn có chắc muốn xoá mục này? Thao tác chỉ có hiệu lực sau khi bạn bấm Lưu.', 'Xoá').then(function (ok) {
+    if (!ok) return; S.profile[arrKey] = S.profile[arrKey].filter(function (x) { return x.id !== id; }); markDirty(); render();
+  });
+}
+
+/* ---------------------------------------------------------------- Thông tin cơ bản */
+PAGES.basic = function (root) {
+  var P = S.profile, B = P.basic, D = CV.derive(P), E = CV.effective(P);
+  var ver = B.contactEmail ? (B.contactEmailVerified ? '<span class="tag ok">Đã xác minh</span>' : '<button class="btn sm" data-act="verify_email">Xác minh email này</button>') : '';
+  var idl = P.idDoc.type === 'CMND' ? 'Số CMND' : P.idDoc.type === 'CCCD' ? 'Số CCCD' : 'Số thẻ căn cước';
+  root.innerHTML = head('Thông tin cơ bản', 'Mục I của mẫu lý lịch khoa học, bố cục theo từng dòng như mẫu. Dấu <span style="color:var(--bad)">*</span> là bắt buộc.') +
+    '<div class="card"><h2 class="sec">I. Lý lịch sơ lược</h2>' +
+    irow(fld('Họ và tên', 'basic.fullName', { req: 1, inl: 1, w: '62%' }), fld('Giới tính', 'basic.gender', { t: 'select', opts: ['Nữ', 'Nam'], inl: 1, w: '28%', cls: 'sm' })) +
+    irow(fld('Ngày, tháng, năm sinh', 'basic.dob', { v: 'date', ph: 'dd/mm/yyyy', inl: 1, w: '48%' }), fld('Nơi sinh', 'basic.pob', { list: 'geo', seg: 1, inl: 1, w: '46%', ph: 'Phường/xã, tỉnh/thành phố' })) +
+    irow(fld('Quê quán', 'basic.hometown', { list: 'geo', seg: 1, inl: 1, w: '62%', ph: 'Phường/xã, tỉnh/thành phố' }), fld('Dân tộc', 'basic.ethnicity', { list: 'ethnicities', inl: 1, w: '28%', cls: 'sm' })) +
+    irow(fld('Học vị cao nhất', 'basic.hvDegree', { val: E.degree, list: 'degrees', inl: 1, w: '36%' }), fld('Năm nhận học vị', 'basic.hvYear', { val: E.year, v: 'year', list: 'years', inl: 1, w: '24%', cls: 'sm' }), fld('Nước nhận học vị', 'basic.hvCountry', { val: E.country, list: 'countries', inl: 1, w: '30%' })) +
+    irow(fld('Chức danh khoa học cao nhất', 'basic.hvTitle', { val: E.title, list: 'titles', inl: 1, w: '62%' }), fld('Năm bổ nhiệm', 'basic.hvTitleYear', { val: E.titleYear, v: 'year', list: 'years', inl: 1, w: '28%', cls: 'sm' })) +
+    '<p class="muted small" style="margin:-4px 0 12px">Học vị, năm, nước và chức danh được tự điền từ mục <a href="#" class="btn link" data-act="go" data-id="training">Quá trình đào tạo</a>; bạn có thể sửa trực tiếp, xoá trống để quay lại giá trị tự suy ra.</p>' +
+    irow(fld('Chức vụ (hiện tại hoặc trước khi nghỉ hưu)', 'basic.position', { inl: 1, w: '100%' })) +
+    irow(fld('Đơn vị công tác (hiện tại hoặc trước khi nghỉ hưu)', 'basic.workplace', { inl: 1, w: '100%' })) +
+    irow(fld('Chỗ ở riêng hoặc địa chỉ liên lạc', 'basic.address', { list: 'geo', seg: 1, inl: 1, w: '100%', hint: 'Gõ số nhà, đường; sau dấu phẩy gõ tên phường/xã để chọn gợi ý (kèm tỉnh/thành phố). Bạn có thể sửa tự do.' })) +
+    '<div class="irow"><div class="f lab-only"><label style="padding-top:9px">Điện thoại liên hệ:</label></div>' + fld('CQ', 'basic.phoneCQ', { inl: 1, w: '24%', cls: 'sm' }) + fld('NR', 'basic.phoneNR', { inl: 1, w: '24%', cls: 'sm' }) + fld('ĐĐ', 'basic.phoneDD', { inl: 1, w: '24%', cls: 'sm' }) + '</div>' +
+    irow(fld('Fax', 'basic.fax', { inl: 1, w: '36%' }), fld('E-mail', 'basic.contactEmail', { v: 'email', ph: S.user.email, inl: 1, w: '54%', hint: 'Để trống = dùng email đăng nhập (' + esc(S.user.email) + '). Email khác cần xác minh. ' + ver })) +
+    irow('<div class="f sm" style="--w:150px"><label>Loại</label><div class="fw"><select id="f_idDoc_type" data-bind="idDoc.type">' + [['CMND', 'CMND (cũ)'], ['CCCD', 'CCCD'], ['The can cuoc', 'Thẻ căn cước']].map(function (o) { return '<option value="' + o[0] + '"' + (P.idDoc.type === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div></div>',
+      fld(idl, 'idDoc.number', { inl: 1, w: '32%', hint: 'Mã hoá khi lưu, không hiển thị cho quản trị.' }), fld('Ngày cấp', 'idDoc.issueDate', { v: 'date', ph: 'dd/mm/yyyy', inl: 1, w: '26%', cls: 'sm' })) +
+    irow(fld('Nơi cấp', 'idDoc.issuePlace', { list: 'idplace', inl: 1, w: '100%', hint: P.idDoc.type === 'CCCD' ? 'Gợi ý mặc định cho CCCD: Cục Cảnh sát quản lý hành chính về trật tự xã hội (có thể sửa).' : 'CMND cũ do công an tỉnh/thành cấp: hãy nhập nơi cấp.' })) + '</div>';
+};
+PAGES._onBind = function (p, v) {
+  var Dv = CV.derive(S.profile), HV = { 'basic.hvDegree': Dv.highestDegree, 'basic.hvYear': Dv.highestDegreeYear, 'basic.hvCountry': Dv.highestDegreeCountry, 'basic.hvTitle': Dv.highestTitle, 'basic.hvTitleYear': Dv.titleYear };
+  if (HV[p] !== undefined && String(v).trim() === HV[p]) setPath(S.profile, p, '');
+  if (p === 'idDoc.type') {
+    if (v === 'CCCD' && !S.profile.idDoc.issuePlace) S.profile.idDoc.issuePlace = CV.CCCD_PLACE;
+    if (v !== 'CCCD' && S.profile.idDoc.issuePlace === CV.CCCD_PLACE) S.profile.idDoc.issuePlace = '';
+    render();
+  }
+  if (p === 'basic.contactEmail') S.profile.basic.contactEmailVerified = false;
+};
+ACT.verify_email = function () {
+  var email = S.profile.basic.contactEmail;
+  if (VAL.email(email)) return toast('Email không hợp lệ.', true);
+  (S.firstRun || S.dirty ? saveProfile() : Promise.resolve(true)).then(function (ok) {
+    if (!ok) return;
+    rpc('apiSendEmailVerification', email).then(function () {
+      var m = openModal('<header><h2>Nhập mã xác minh</h2></header><div class="body"><p>Đã gửi mã 6 chữ số tới <b>' + esc(email) + '</b>. Mã có hiệu lực 48 giờ.</p><div class="f"><label for="vc">Mã xác minh</label><input id="vc" type="text" maxlength="6" inputmode="numeric"><div class="err"></div></div></div><footer><button class="btn" data-close>Đóng</button><button class="btn primary" id="vcOk">Xác nhận</button></footer>', { onEnter: go });
+      function go() { rpc('apiConfirmEmailCode', $('#vc', m.root).value).then(function (r) { S.profile.basic.contactEmail = r.contactEmail; S.profile.basic.contactEmailVerified = true; S.updatedAt = r.updatedAt; m.close(); render(); toast('Đã xác minh email.'); }).catch(function (e) { $('.err', m.root).textContent = e.message; }); }
+      $('#vcOk', m.root).onclick = go; $('#vc', m.root).focus();
+    }).catch(function (e) { toast(e.message, true); });
+  });
+};
+
+/* ---------------------------------------------------------------- Thông tin bổ sung */
+PAGES.extra = function (root) {
+  var X = S.profile.extra, A = X.aspirations;
+  var asp = [['giangDay', 'Thỉnh giảng'], ['hoiDong', 'Tham gia hội đồng khoa học'], ['nghienCuu', 'Tìm đồng đội nghiên cứu'], ['huongDan', 'Hướng dẫn luận văn/luận án'], ['tuVan', 'Tư vấn doanh nghiệp và chuyển giao công nghệ']];
+  root.innerHTML = head('Thông tin bổ sung', 'Phục vụ kết nối nguồn lực. Quản trị <b>chỉ thấy</b> các mục này nếu bạn đồng ý ở “Quyền riêng tư”.') +
+    '<div class="card"><h2>Nguyện vọng</h2>' + asp.map(function (a) { return fld(a[1], 'extra.aspirations.' + a[0], { t: 'check' }); }).join('') + '</div>' +
+    '<div class="card"><div class="page-head" style="margin-bottom:8px"><h2 style="margin:0">Môn có thể giảng dạy</h2><button class="btn sm" data-act="course_add">+ Thêm môn</button></div>' +
+    (X.courses.length ? '<div class="tscroll"><table class="t"><tr><th>Ngành/chuyên ngành</th><th>Tên môn</th><th>Mô tả</th><th></th></tr>' + X.courses.map(function (c) { return '<tr><td>' + esc(c.major) + '</td><td>' + esc(c.name) + '</td><td>' + esc(c.desc) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('course', c.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có môn giảng dạy nào.</div>') + '</div>' +
+    '<div class="card"><div class="page-head" style="margin-bottom:8px"><h2 style="margin:0">Hướng nghiên cứu chuyên sâu</h2><button class="btn sm" data-act="dir_add">+ Thêm hướng</button></div>' +
+    (X.directions.length ? '<div class="tscroll"><table class="t"><tr><th>Hướng nghiên cứu</th><th>Từ khoá</th><th></th></tr>' + X.directions.map(function (c) { return '<tr><td>' + esc(c.name) + '</td><td>' + esc(c.keywords) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('dir', c.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có hướng nghiên cứu nào. Nên nhập kèm từ khoá để việc ghép nối chính xác hơn.</div>') + '</div>' +
+    '<div class="card"><h2>Liên kết định danh học thuật</h2><div class="grid c3">' + fld('ORCID', 'extra.orcid', { ph: '0000-0000-0000-0000' }) + fld('Scopus Author ID', 'extra.scopusId') + fld('Google Scholar (URL)', 'extra.scholar') + '</div></div>';
+};
+/* extra.* là mảng lồng: dùng helper riêng */
+function upsertX(key, rec) { var arr = S.profile.extra[key], i = arr.map(function (x) { return x.id; }).indexOf(rec.id); if (i >= 0) arr[i] = rec; else arr.push(rec); markDirty(); render(); }
+ACT.course_add = function () { openForm({ title: 'Thêm môn giảng dạy', rec: { id: uid() }, fields: [{ k: 'major', label: 'Ngành/chuyên ngành', list: 'majors', req: 1 }, { k: 'name', label: 'Tên môn', req: 1 }, { k: 'desc', label: 'Mô tả ngắn', t: 'area', rows: 2 }], onSave: function (r) { upsertX('courses', r); } }); };
+ACT.course_edit = function (id) { openForm({ title: 'Sửa môn giảng dạy', rec: findById(S.profile.extra.courses, id), fields: [{ k: 'major', label: 'Ngành/chuyên ngành', list: 'majors', req: 1 }, { k: 'name', label: 'Tên môn', req: 1 }, { k: 'desc', label: 'Mô tả ngắn', t: 'area', rows: 2 }], onSave: function (r) { upsertX('courses', r); } }); };
+ACT.course_del = function (id) { confirmBox('Xoá môn', 'Xoá môn giảng dạy này?', 'Xoá').then(function (ok) { if (ok) { S.profile.extra.courses = S.profile.extra.courses.filter(function (x) { return x.id !== id; }); markDirty(); render(); } }); };
+var DIR_FIELDS = [{ k: 'name', label: 'Hướng nghiên cứu', req: 1 }, { k: 'keywords', label: 'Từ khoá', hint: 'Phân tách bằng dấu phẩy, ví dụ: học sâu, thị giác máy tính', t: 'area', rows: 2 }];
+ACT.dir_add = function () { openForm({ title: 'Thêm hướng nghiên cứu', rec: { id: uid() }, fields: DIR_FIELDS, onSave: function (r) { upsertX('directions', r); } }); };
+ACT.dir_edit = function (id) { openForm({ title: 'Sửa hướng nghiên cứu', rec: findById(S.profile.extra.directions, id), fields: DIR_FIELDS, onSave: function (r) { upsertX('directions', r); } }); };
+ACT.dir_del = function (id) { confirmBox('Xoá hướng nghiên cứu', 'Xoá hướng nghiên cứu này?', 'Xoá').then(function (ok) { if (ok) { S.profile.extra.directions = S.profile.extra.directions.filter(function (x) { return x.id !== id; }); markDirty(); render(); } }); };
+
+/* ---------------------------------------------------------------- Quá trình đào tạo */
+var DEG_BY_LEVEL = { 'Đại học': ['Cử nhân', 'Kỹ sư'], 'Sau đại học': ['Thạc sĩ', 'Tiến sĩ', 'Tiến sĩ (DBA)'] };
+var LANG_LEVELS = ['Thành thạo', 'Tốt', 'Khá', 'Trung bình', 'Cơ bản'];
+PAGES.training = function (root) {
+  var P = S.profile, tab = S.trainTab;
+  var add = '<div class="menu"><button class="btn primary" data-act="menu">+ Thêm ▾</button><div class="menu-pop" hidden><button data-act="deg_add">Thêm học vị</button><button data-act="title_add">Thêm học hàm</button><button data-act="lang_add">Thêm ngoại ngữ</button></div></div>';
+  var body = '';
+  if (tab === 'deg') {
+    body += warnBox('degrees');
+    body += '<h2>Học vị</h2>' + (P.degrees.length ? '<div class="tscroll"><table class="t"><tr><th>Bậc / Học vị</th><th>Ngành</th><th>Nơi đào tạo</th><th>Năm</th><th></th></tr>' +
+      P.degrees.slice().sort(function (a, b) { return CV.num(a.year) - CV.num(b.year); }).map(function (d) { return '<tr><td>' + esc(d.level) + '<br><b>' + esc(d.degree) + '</b>' + (d.second ? ' <span class="tag">Bằng 2</span>' : '') + '</td><td>' + esc(d.major) + '</td><td>' + esc(d.institution) + (d.country ? '<br><span class="muted small">' + esc(d.country) + '</span>' : '') + '</td><td>' + esc(d.year) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('deg', d.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có học vị nào. Thêm học vị.</div>');
+    body += '<h2 style="margin-top:20px">Học hàm</h2>' + (P.titles.length ? '<div class="tscroll"><table class="t"><tr><th>Chức danh</th><th>Ngành/chuyên ngành</th><th>Năm phong/bổ nhiệm</th><th></th></tr>' + P.titles.map(function (t) { return '<tr><td><b>' + esc(t.title) + '</b></td><td>' + esc(t.major) + '</td><td>' + esc(t.year) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('title', t.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có học hàm nào. Bỏ qua nếu bạn chưa được phong/bổ nhiệm.</div>');
+  } else {
+    body += '<p class="muted">Kéo thả (hoặc dùng mũi tên) để sắp thứ tự ưu tiên. Mẫu có 3 dòng ngoại ngữ nên file Word tự động thêm dòng khi bạn có nhiều hơn 3.</p>' +
+      (P.languages.length ? '<div class="tscroll"><table class="t" id="langTable"><tr><th style="width:30px"></th><th>Ngôn ngữ</th><th>Mức độ sử dụng</th><th>Chứng chỉ</th><th></th></tr>' + P.languages.map(function (l, i) { return '<tr draggable="true" data-id="' + l.id + '"><td class="muted" style="cursor:grab">⋮⋮</td><td>' + (i + 1) + '. ' + esc(l.language) + '</td><td>' + esc(l.level) + '</td><td>' + esc(l.certificate) + '</td><td class="right" style="white-space:nowrap"><button class="btn sm" data-act="lang_up" data-id="' + l.id + '">↑</button> <button class="btn sm" data-act="lang_down" data-id="' + l.id + '">↓</button> ' + actionBtns('lang', l.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có ngoại ngữ nào. Thêm ngoại ngữ.</div>');
+  }
+  root.innerHTML = head('Quá trình đào tạo', 'Mục II của mẫu. Học vị cao nhất và chức danh cao nhất ở trang “Thông tin cơ bản” được tự suy ra từ đây.', add) +
+    '<div class="card"><div class="tabs"><button class="' + (tab === 'deg' ? 'on' : '') + '" data-act="ttab" data-id="deg">Học vị – Học hàm</button><button class="' + (tab === 'lang' ? 'on' : '') + '" data-act="ttab" data-id="lang">Ngoại ngữ</button></div>' + body + '</div>';
+  var tb = $('#langTable');
+  if (tb) {
+    var dragId = null;
+    $$('tr[draggable]', tb).forEach(function (tr) {
+      tr.addEventListener('dragstart', function () { dragId = tr.dataset.id; });
+      tr.addEventListener('dragover', function (e) { e.preventDefault(); });
+      tr.addEventListener('drop', function (e) { e.preventDefault(); if (!dragId || dragId === tr.dataset.id) return; var a = S.profile.languages, from = a.map(function (x) { return x.id; }).indexOf(dragId), to = a.map(function (x) { return x.id; }).indexOf(tr.dataset.id); a.splice(to, 0, a.splice(from, 1)[0]); markDirty(); render(); });
+    });
+  }
+};
+ACT.ttab = function (t) { S.trainTab = t; render(); };
+function degFields(rec) {
+  return [
+    { k: 'level', label: 'Bậc học', t: 'select', opts: ['Đại học', 'Sau đại học'], req: 1 },
+    { k: 'degree', label: 'Học vị', t: 'select', opts: [], req: 1 },
+    { k: 'major', label: 'Ngành/chuyên ngành', list: 'majors', req: 1 },
+    { k: 'institution', label: 'Nơi đào tạo', list: 'schools', req: 1 },
+    { k: 'country', label: 'Nước đào tạo', list: 'countries', req: 1 },
+    { k: 'year', label: 'Năm tốt nghiệp/cấp bằng', v: 'year', req: 1, ph: 'yyyy' },
+    { k: 'system', label: 'Hệ đào tạo', list: 'systems', show: function (r) { return r.level === 'Đại học'; }, hint: 'Chính quy, vừa làm vừa học, từ xa…' },
+    { k: 'second', label: 'Đây là bằng đại học thứ hai', t: 'check', show: function (r) { return r.level === 'Đại học'; } },
+    { k: 'thesis', label: 'Tên luận văn/luận án', t: 'area', rows: 2, show: function (r) { return r.level === 'Sau đại học' && (r.degree === 'Thạc sĩ' || String(r.degree).indexOf('Tiến sĩ') === 0); }, hint: 'Mẫu BM04 chỉ in tên luận án (Tiến sĩ).' }
+  ];
+}
+function fixDegOpts(root, rec) {
+  var sel = $('#mf_degree', root); if (!sel) return; var opts = DEG_BY_LEVEL[rec.level] || [];
+  sel.innerHTML = '<option value=""></option>' + opts.map(function (o) { return '<option' + (o === rec.degree ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+  if (opts.indexOf(rec.degree) < 0) { rec.degree = ''; }
+}
+function openDegForm(rec) {
+  var isNew = !rec;
+  var m = openForm({ title: isNew ? 'Thêm học vị' : 'Sửa học vị', rec: rec || { id: uid(), level: 'Đại học' }, fields: degFields(), wide: false,
+    onChange: function (r, root) { if (root._lv !== r.level) { root._lv = r.level; fixDegOpts(root, r); } },
+    onSave: function (r) {
+      var dup = S.profile.degrees.some(function (d) { return d.id !== r.id && d.degree === r.degree && CV.norm(d.major) === CV.norm(r.major) && d.year === r.year; });
+      if (dup) toast('Lưu ý: có thể bạn đã nhập học vị này.');
+      upsert('degrees', r);
+    } });
+  m.root._lv = (rec || { level: 'Đại học' }).level; fixDegOpts(m.root, rec || { level: 'Đại học', degree: '' });
+  if (rec) $('#mf_degree', m.root).value = rec.degree;
+}
+ACT.deg_add = function () { S.trainTab = 'deg'; openDegForm(); };
+ACT.deg_edit = function (id) { openDegForm(findById(S.profile.degrees, id)); };
+ACT.deg_del = function (id) { delItem('degrees', id, 'học vị'); };
+var TITLE_FIELDS = [{ k: 'title', label: 'Chức danh', t: 'select', opts: [{ v: 'GS', l: 'GS – Giáo sư' }, { v: 'PGS', l: 'PGS – Phó giáo sư' }], req: 1 }, { k: 'major', label: 'Ngành/chuyên ngành', list: 'majors', req: 1 }, { k: 'year', label: 'Năm phong/bổ nhiệm', v: 'year', req: 1, ph: 'yyyy' }];
+ACT.title_add = function () { S.trainTab = 'deg'; openForm({ title: 'Thêm học hàm', rec: { id: uid() }, fields: TITLE_FIELDS, onSave: function (r) { upsert('titles', r); } }); };
+ACT.title_edit = function (id) { openForm({ title: 'Sửa học hàm', rec: findById(S.profile.titles, id), fields: TITLE_FIELDS, onSave: function (r) { upsert('titles', r); } }); };
+ACT.title_del = function (id) { delItem('titles', id, 'học hàm'); };
+var LANG_FIELDS = [{ k: 'language', label: 'Ngôn ngữ', list: 'languages', req: 1 }, { k: 'level', label: 'Mức độ sử dụng', t: 'select', opts: LANG_LEVELS, req: 1 }, { k: 'certificate', label: 'Chứng chỉ (tuỳ chọn)', ph: 'IELTS 7.0, TOEIC 850…' }];
+ACT.lang_add = function () { S.trainTab = 'lang'; openForm({ title: 'Thêm ngoại ngữ', rec: { id: uid() }, fields: LANG_FIELDS, onSave: function (r) { upsert('languages', r); } }); };
+ACT.lang_edit = function (id) { openForm({ title: 'Sửa ngoại ngữ', rec: findById(S.profile.languages, id), fields: LANG_FIELDS, onSave: function (r) { upsert('languages', r); } }); };
+ACT.lang_del = function (id) { delItem('languages', id, 'ngoại ngữ'); };
+function moveLang(id, d) { var a = S.profile.languages, i = a.map(function (x) { return x.id; }).indexOf(id), j = i + d; if (j < 0 || j >= a.length) return; a.splice(j, 0, a.splice(i, 1)[0]); markDirty(); render(); }
+ACT.lang_up = function (id) { moveLang(id, -1); }; ACT.lang_down = function (id) { moveLang(id, 1); };
+
+/* ---------------------------------------------------------------- Quá trình công tác */
+var WORK_FIELDS = [
+  { k: 'from', label: 'Từ (tháng/năm)', v: 'monthyear', req: 1, ph: 'mm/yyyy', full: false },
+  { k: 'to', label: 'Đến (tháng/năm)', v: 'monthyear', ph: 'mm/yyyy', full: false, show: function (r) { return !r.current; }, req: 1 },
+  { k: 'current', label: 'Hiện nay (đang làm)', t: 'check' },
+  { k: 'org', label: 'Cơ quan/đơn vị công tác', list: 'schools', req: 1 },
+  { k: 'position', label: 'Chức vụ' },
+  { k: 'duties', label: 'Công việc đảm nhiệm', t: 'area', rows: 3 }];
+PAGES.work = function (root) {
+  var list = S.profile.work.slice().sort(function (a, b) { return (CV.monthIdx(b.from) || 0) - (CV.monthIdx(a.from) || 0); });
+  root.innerHTML = head('Quá trình công tác', 'Mục III của mẫu: xuất 3 cột Thời gian, Nơi công tác, Công việc đảm nhiệm.', '<button class="btn primary" data-act="work_add">+ Thêm giai đoạn</button>') + warnBox('work') +
+    '<div class="card">' + (list.length ? '<div class="tscroll"><table class="t"><tr><th>Thời gian</th><th>Nơi công tác</th><th>Công việc đảm nhiệm</th><th></th></tr>' + list.map(function (w) { return '<tr><td style="white-space:nowrap">' + esc(CV.fmtPeriod(w)) + '</td><td>' + esc(w.org) + (w.position ? '<br><span class="muted small">' + esc(w.position) + '</span>' : '') + '</td><td>' + esc(w.duties) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('work', w.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có quá trình công tác. Thêm giai đoạn công tác.</div>') + '</div>';
+};
+ACT.work_add = function () { openForm({ title: 'Thêm giai đoạn công tác', rec: { id: uid() }, fields: WORK_FIELDS, onSave: function (r) { upsert('work', r); } }); };
+ACT.work_edit = function (id) { openForm({ title: 'Sửa giai đoạn công tác', rec: findById(S.profile.work, id), fields: WORK_FIELDS, onSave: function (r) { upsert('work', r); } }); };
+ACT.work_del = function (id) { delItem('work', id, 'giai đoạn công tác'); };
+
+/* ---------------------------------------------------------------- Đề tài */
+var PRJ_FIELDS = [
+  { k: 'name', label: 'Tên đề tài', t: 'area', rows: 2, req: 1 },
+  { k: 'startYear', label: 'Năm bắt đầu', v: 'year', req: 1, full: false, ph: 'yyyy' },
+  { k: 'endYear', label: 'Năm hoàn thành', v: 'year', full: false, ph: 'yyyy', show: function (r) { return !r.ongoing; } },
+  { k: 'ongoing', label: 'Đang thực hiện', t: 'check' },
+  { k: 'level', label: 'Cấp đề tài', t: 'select', opts: CV.LEVELS, req: 1, full: false },
+  { k: 'role', label: 'Trách nhiệm tham gia', t: 'select', opts: CV.ROLES, req: 1, full: false },
+  { k: 'code', label: 'Mã số (nội bộ)', full: false, hint: 'Chỉ dùng cho bộ lọc của quản trị nếu bạn chia sẻ; không xuất ra file mặc định.' },
+  { k: 'funding', label: 'Kinh phí (nội bộ)', full: false },
+  { k: 'result', label: 'Kết quả nghiệm thu (nội bộ)' }];
+PAGES.projects = function (root) {
+  var list = S.profile.projects.slice().sort(function (a, b) { return CV.num(b.startYear) - CV.num(a.startYear); });
+  root.innerHTML = head('Đề tài tham gia', 'Mục IV.1 của mẫu: tên đề tài, năm bắt đầu/hoàn thành, cấp, trách nhiệm tham gia.', '<button class="btn primary" data-act="prj_add">+ Thêm đề tài</button>') + warnBox('projects') +
+    '<div class="card">' + (list.length ? '<div class="tscroll"><table class="t"><tr><th>Tên đề tài</th><th>Năm</th><th>Cấp</th><th>Trách nhiệm</th><th></th></tr>' + list.map(function (p) { return '<tr><td>' + esc(p.name) + (p.code ? '<br><span class="muted small">Mã số: ' + esc(p.code) + '</span>' : '') + '</td><td style="white-space:nowrap">' + esc(CV.fmtYears(p)) + '</td><td>' + esc(p.level) + '</td><td>' + esc(p.role) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('prj', p.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có đề tài nào. Thêm đề tài.</div>') + '</div>';
+};
+ACT.prj_add = function () { openForm({ title: 'Thêm đề tài', rec: { id: uid() }, fields: PRJ_FIELDS, wide: true, onSave: function (r) { upsert('projects', r); } }); };
+ACT.prj_edit = function (id) { openForm({ title: 'Sửa đề tài', rec: findById(S.profile.projects, id), fields: PRJ_FIELDS, wide: true, onSave: function (r) { upsert('projects', r); } }); };
+ACT.prj_del = function (id) { delItem('projects', id, 'đề tài'); };
+
+/* ---------------------------------------------------------------- Công bố khoa học */
+var PUB_FIELDS = [
+  { k: 'type', label: 'Loại công trình', t: 'select', opts: [{ v: 'article', l: 'Bài báo tạp chí' }, { v: 'conference', l: 'Báo cáo hội thảo' }, { v: 'book', l: 'Sách/giáo trình' }], req: 1 },
+  { k: 'title', label: 'Tên công trình', t: 'area', rows: 2, req: 1 },
+  { k: 'authors', label: 'Danh sách tác giả (đúng thứ tự)', t: 'authors', req: 1 },
+  { k: 'venue', label: 'Tên tạp chí / hội thảo', show: function (r) { return r.type !== 'book'; }, req: 1 },
+  { k: 'volume', label: 'Tập', full: false, show: function (r) { return r.type !== 'book'; } },
+  { k: 'issue', label: 'Số', full: false, show: function (r) { return r.type !== 'book'; } },
+  { k: 'pages', label: 'Trang', full: false, show: function (r) { return r.type !== 'book'; } },
+  { k: 'year', label: 'Năm công bố', v: 'year', req: 1, full: false, ph: 'yyyy' },
+  { k: 'publisher', label: 'Nhà xuất bản', show: function (r) { return r.type !== 'article'; }, req: 0 },
+  { k: 'bookRole', label: 'Vai trò trong sách', t: 'select', opts: ['Chủ biên', 'Đồng chủ biên', 'Tham gia'], show: function (r) { return r.type === 'book'; } },
+  { k: 'registrationNo', label: 'Số xác nhận đăng ký xuất bản', show: function (r) { return r.type === 'book'; } },
+  { k: 'issn', label: 'ISSN', full: false, show: function (r) { return r.type !== 'book'; } },
+  { k: 'isbn', label: 'ISBN', full: false, show: function (r) { return r.type !== 'article'; } },
+  { k: 'doi', label: 'DOI', full: false, show: function (r) { return r.type !== 'book'; } },
+  { k: 'indexClass', label: 'Phân loại chỉ mục', t: 'select', opts: [{ v: 'isi_scopus', l: 'ISI/Scopus' }, { v: 'intl_other', l: 'Quốc tế khác' }, { v: 'domestic', l: 'Trong nước' }], hint: 'Dùng cho bộ lọc quốc tế/trong nước của quản trị.' },
+  { k: 'keywords', label: 'Từ khoá', t: 'tags' }];
+function guessMe(authors) {
+  var me = CV.norm(S.profile.basic.fullName); if (!me) return authors;
+  var parts = me.split(' '), rev = parts.length > 1 ? parts.slice(1).concat(parts[0]).join(' ') : me, found = false;
+  authors.forEach(function (a) { a.me = false; var n = CV.norm(a.name); if (!found && (n === me || n === rev)) { a.me = true; found = true; } });
+  if (!found && authors.length === 0) authors.push({ name: S.profile.basic.fullName, me: true, main: false, corr: false });
+  return authors;
+}
+function openPubForm(rec, isNew) {
+  rec = rec || { id: uid(), type: 'article', authors: [{ name: S.profile.basic.fullName || '', me: true, main: false, corr: false }], source: 'manual' };
+  openForm({ title: isNew === false ? 'Sửa công bố' : (rec.source && rec.source !== 'manual' ? 'Xác nhận thông tin công bố' : 'Thêm công bố'), rec: rec, fields: PUB_FIELDS, wide: true,
+    onSave: function (r, orig) {
+      r.verified = !!(orig.verified && orig.doi && orig.doi === r.doi); if (!r.verified && r.source !== 'manual') r.source = 'manual';
+      if (rec.source && rec.source !== 'manual' && isNew !== false) r.verified = true;
+      if (!(r.authors || []).some(function (a) { return a.me; })) toast('Bạn chưa đánh dấu vị trí của mình trong danh sách tác giả.');
+      var dup = S.profile.pubs.some(function (p) { return p.id !== r.id && ((r.doi && p.doi && p.doi.toLowerCase() === r.doi.toLowerCase()) || (CV.norm(p.title) === CV.norm(r.title) && p.year === r.year)); });
+      if (dup) toast('Lưu ý: công bố này có thể đã được nhập trước đó.');
+      upsert('pubs', r);
+    } });
+}
+var pubFilter = { q: '', type: '' };
+PAGES.pubs = function (root) {
+  var all = S.profile.pubs, q = CV.norm(pubFilter.q);
+  var list = all.filter(function (p) { return (!pubFilter.type || p.type === pubFilter.type) && (!q || CV.norm(p.title + ' ' + p.venue).indexOf(q) >= 0); }).sort(function (a, b) { return CV.num(b.year) - CV.num(a.year); });
+  var ver = all.filter(function (p) { return p.verified; }).length;
+  root.innerHTML = head('Công bố khoa học', 'Mục IV.2 của mẫu. <b>Nhập tay luôn dùng được</b>; tra DOI chỉ là hỗ trợ và luôn có bước bạn xác nhận.',
+    '<div class="row"><button class="btn" data-act="pub_doi">Tự điền từ DOI/URL</button><button class="btn primary" data-act="pub_add">+ Thêm thủ công</button></div>') + warnBox('pubs') +
+    '<div class="card"><div class="row" style="margin-bottom:10px"><input class="inp" style="max-width:280px" id="pubQ" placeholder="Tìm theo tên hoặc tạp chí" value="' + esc(pubFilter.q) + '"><select class="inp" style="max-width:190px" id="pubT"><option value="">Mọi loại</option>' + Object.keys(CV.PUB_TYPE).map(function (k) { return '<option value="' + k + '"' + (pubFilter.type === k ? ' selected' : '') + '>' + CV.PUB_TYPE[k] + '</option>'; }).join('') + '</select><span class="spacer"></span><span class="muted small">' + all.length + ' công bố · ' + ver + ' đã xác minh DOI · ' + (all.length - ver) + ' tự khai</span></div>' +
+    (list.length ? '<div class="tscroll"><table class="t"><tr><th>Tên công trình</th><th>Năm</th><th>Nơi công bố</th><th>Phân loại</th><th></th></tr>' + list.map(function (p) { return '<tr><td>' + esc(p.title) + '<br><span class="muted small">' + esc((p.authors || []).map(function (a) { return a.name; }).slice(0, 4).join(', ')) + ((p.authors || []).length > 4 ? ' …' : '') + '</span></td><td>' + esc(p.year) + '</td><td>' + esc(p.venue || p.publisher) + '<br><span class="tag">' + esc(CV.PUB_TYPE[p.type]) + '</span></td><td>' + (p.indexClass ? '<span class="tag">' + CV.INDEX_CLASS[p.indexClass] + '</span>' : '') + (p.verified ? '<span class="tag ok">Đã xác minh</span>' : '<span class="tag warn">Tự khai</span>') + '</td><td class="right" style="white-space:nowrap">' + actionBtns('pub', p.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">' + (all.length ? 'Không có công bố khớp bộ lọc.' : 'Chưa có công bố nào. Thêm thủ công hoặc tự điền từ DOI.') + '</div>') + '</div>';
+  $('#pubQ').oninput = function () { pubFilter.q = this.value; clearTimeout(PAGES.pubs.t); var el = this; PAGES.pubs.t = setTimeout(function () { render(); var n = $('#pubQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
+  $('#pubT').onchange = function () { pubFilter.type = this.value; render(); };
+};
+ACT.pub_add = function () { openPubForm(); };
+ACT.pub_edit = function (id) { openPubForm(findById(S.profile.pubs, id), false); };
+ACT.pub_del = function (id) { delItem('pubs', id, 'công bố'); };
+ACT.pub_doi = function () {
+  var m = openModal('<header><h2>Tự điền từ DOI hoặc URL</h2><button class="x" data-close>×</button></header><div class="body"><p class="muted">Dán DOI (10.xxxx/…) hoặc URL chứa DOI. Hệ thống tra Crossref (dự phòng OpenAlex). Kết quả chỉ là bản xem trước để bạn xác nhận và bổ sung.</p><div class="f"><label for="doiIn">DOI / URL</label><input id="doiIn" type="text" placeholder="https://doi.org/10.1000/xyz123"><div class="err"></div></div><div id="doiRes"></div></div><footer><button class="btn" data-close>Đóng</button><button class="btn primary" id="doiGo">Tra cứu</button></footer>', { onEnter: go });
+  var cand = null;
+  function go() {
+    var v = $('#doiIn', m.root).value.trim(); if (!v) return; var b = $('#doiGo', m.root);
+    if (cand) { var r = cand; r.id = uid(); r.authors = guessMe(r.authors || []); m.close(); openPubForm(r, true); return; }
+    b.disabled = true; b.textContent = 'Đang tra cứu…'; $('.err', m.root).textContent = '';
+    rpc('apiLookupDoi', v).then(function (r) {
+      cand = r; b.disabled = false; b.textContent = 'Dùng kết quả';
+      $('#doiRes', m.root).innerHTML = '<div class="cand"><b>' + esc(r.title) + '</b><div class="small muted">' + esc((r.authors || []).slice(0, 8).map(function (a) { return a.name; }).join(', ')) + ((r.authors || []).length > 8 ? ' …' : '') + '</div><div class="small">' + esc(r.venue) + (r.year ? ' · ' + esc(r.year) : '') + (r.volume ? ' · tập ' + esc(r.volume) : '') + (r.pages ? ' · tr. ' + esc(r.pages) : '') + '</div><div class="small muted">Nguồn: ' + (r.source === 'crossref' ? 'Crossref' : 'OpenAlex') + '. Thứ tự họ tên người Việt đã được chuẩn hoá tự động, hãy kiểm tra lại.</div></div>';
+    }).catch(function (e) { b.disabled = false; b.textContent = 'Tra cứu'; $('.err', m.root).textContent = e.message; });
+  }
+  $('#doiGo', m.root).onclick = go; $('#doiIn', m.root).addEventListener('input', function () { cand = null; $('#doiGo', m.root).textContent = 'Tra cứu'; $('#doiRes', m.root).innerHTML = ''; });
+  $('#doiIn', m.root).focus();
+};
+
+/* ---------------------------------------------------------------- Giải thưởng, sáng chế */
+var AWD_FIELDS = [{ k: 'kind', label: 'Loại', t: 'select', opts: Object.keys(CV.AWARD_KIND).map(function (k) { return { v: k, l: CV.AWARD_KIND[k] }; }), req: 1 }, { k: 'name', label: 'Tên', req: 1 }, { k: 'issuer', label: 'Cơ quan cấp / đối tác' }, { k: 'year', label: 'Năm', v: 'year', ph: 'yyyy' }, { k: 'content', label: 'Nội dung', t: 'area', rows: 3 }];
+PAGES.awards = function (root) {
+  var list = S.profile.awards.slice().sort(function (a, b) { return CV.num(b.year) - CV.num(a.year); });
+  root.innerHTML = head('Giải thưởng, sáng chế, chuyển giao công nghệ', 'Mục phụ tuỳ chọn. Mẫu BM04 không có mục này nên <b>mặc định tắt</b> khi xuất; hữu ích cho việc kết nối tư vấn doanh nghiệp.', '<button class="btn primary" data-act="awd_add">+ Thêm</button>') +
+    '<div class="card">' + (list.length ? '<div class="tscroll"><table class="t"><tr><th>Loại</th><th>Tên / nội dung</th><th>Cơ quan / đối tác</th><th>Năm</th><th></th></tr>' + list.map(function (a) { return '<tr><td><span class="tag">' + esc(CV.AWARD_KIND[a.kind]) + '</span></td><td>' + esc(a.name) + (a.content ? '<br><span class="muted small">' + esc(a.content) + '</span>' : '') + '</td><td>' + esc(a.issuer) + '</td><td>' + esc(a.year) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('awd', a.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có mục nào.</div>') + '</div>';
+};
+ACT.awd_add = function () { openForm({ title: 'Thêm giải thưởng/sáng chế', rec: { id: uid(), kind: 'giai_thuong' }, fields: AWD_FIELDS, onSave: function (r) { upsert('awards', r); } }); };
+ACT.awd_edit = function (id) { openForm({ title: 'Sửa', rec: findById(S.profile.awards, id), fields: AWD_FIELDS, onSave: function (r) { upsert('awards', r); } }); };
+ACT.awd_del = function (id) { delItem('awards', id, 'mục này'); };
+
+/* ---------------------------------------------------------------- Xuất CV + xem trước */
+function runsHtml(runs) { return runs.map(function (r) { var t = esc(r.t); if (r.b) t = '<b>' + t + '</b>'; if (r.i) t = '<i>' + t + '</i>'; return t; }).join(''); }
+function cellHtml(c) { if (typeof c === 'string') return esc(c); return c.paras.map(function (p) { return '<div>' + (runsHtml(p) || '&nbsp;') + '</div>'; }).join(''); }
+function modelToHtml(blocks) {
+  var out = '', i = 0;
+  while (i < blocks.length) {
+    var b = blocks[i];
+    if (b.t === 'p') {
+      var sz = b.size ? ' font-size:' + (b.size * 1.3333).toFixed(1) + 'px;' : '';
+      out += '<p' + (b.sec ? ' data-sec="' + b.sec + '"' : '') + ' style="' + (b.rule ? 'width:' + (b.rule * 100) + '%;margin-left:auto;margin-right:auto;border-bottom:1px solid #000;padding-bottom:2px;' : '') + 'text-align:' + b.align + ';margin-top:' + ((b.before || 0) * 1.33) + 'px;margin-bottom:' + ((b.after == null ? 3 : b.after) * 1.33) + 'px;' + sz + '">' + (runsHtml(b.runs) || '&nbsp;') + '</p>'; i++;
+    } else if (b.t === 'row') {
+      var prev = b.leadW || 0, n = b.items.length;
+      out += '<div class="rw" style="margin-bottom:' + ((b.after == null ? 3 : b.after) * 1.33) + 'px">' + (b.leadW ? '<span class="it" style="flex:0 0 ' + (b.leadW * 100) + '%"><span class="tx">' + (b.lead ? '<b>' + esc(b.lead) + '</b>' : '&nbsp;') + '</span></span>' : '') + b.items.map(function (it, k) {
+        var end = k < n - 1 ? (b.stops[k] || (k + 1) / n) : 1, w = Math.round((end - prev) * 1000) / 10; prev = end;
+        return '<span class="it" style="flex:1 1 ' + w + '%"><span class="tx">' + esc(it.label + (it.plain ? ' ' : ': ')) + (it.value ? '<b>' + esc(it.value) + '</b>' : '') + '</span>' + (it.value ? '<span class="gap"></span>' : '<span class="dots"></span>') + '</span>';
+      }).join('') + '</div>'; i++;
+    } else if (b.t === 'table') {
+      out += '<table class="cvt"' + (b.sec ? ' data-sec="' + b.sec + '"' : '') + '><colgroup>' + b.widths.map(function (w) { return '<col style="width:' + w + '%">'; }).join('') + '</colgroup><tr>' + b.head.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr>' +
+        b.rows.map(function (r) { return '<tr>' + r.map(function (c, ci) { return '<td' + (b.center && b.center.indexOf(ci) >= 0 ? ' style="text-align:center"' : '') + '>' + cellHtml(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>'; i++;
+    } else if (b.t === 'sign') {
+      out += '<table class="sign" data-sec="sign"><tr><td>' + cellHtml(b.left) + '</td><td>' + cellHtml(b.right) + '</td></tr></table>'; i++;
+    } else i++;
+  }
+  return out;
+}
+var SEC_LABEL = { general: 'I. Lý lịch sơ lược', education: 'II.1–2. Đại học, sau đại học', languages: 'II.3. Ngoại ngữ', work: 'III. Quá trình công tác', projects: 'IV.1. Đề tài', publications: 'IV.2. Công trình', awards: 'V. Giải thưởng, sáng chế (tuỳ chọn)', sign: 'Chân mẫu (xác nhận, ký tên)' };
+var FIELD_LABEL = { fullName: 'Họ và tên', gender: 'Giới tính', dob: 'Ngày sinh', pob: 'Nơi sinh', hometown: 'Quê quán', ethnicity: 'Dân tộc', highestDegree: 'Học vị cao nhất', degreeYearCountry: 'Năm, nước nhận học vị', title: 'Chức danh khoa học', titleYear: 'Năm bổ nhiệm', position: 'Chức vụ', workplace: 'Đơn vị công tác', address: 'Địa chỉ liên lạc', phones: 'Điện thoại', fax: 'Fax', email: 'E-mail', idDoc: 'Số CMND/CCCD, ngày cấp, nơi cấp' };
+function cfgChk(path, label) { var v = getPath(S.exportCfg, path); return '<label class="chk"><input type="checkbox" data-cfg="' + path + '"' + (v ? ' checked' : '') + '><span>' + label + '</span></label>'; }
+PAGES.export = function (root) {
+  if (!S.exportCfg) S.exportCfg = CV.defaultConfig('BM04');
+  var c = S.exportCfg;
+  root.innerHTML = head('Xuất hồ sơ', 'Chọn mẫu, bật/tắt từng mục và từng trường, xem trước rồi xuất file Word (.docx).') +
+    (S.firstRun ? '<div class="alert info">Hồ sơ chưa được lưu. Hệ thống sẽ tự lưu trước khi xuất.</div>' : '') +
+    '<div class="split"><div class="card cfg" id="cfgPanel">' +
+    '<div class="f"><label>Mẫu xuất</label><select data-cfgsel="template"><option value="BM04"' + (c.template === 'BM04' ? ' selected' : '') + '>BM04/QT03/ĐT – mẫu của Bộ (chuẩn)</option><option value="BM04_FULL"' + (c.template === 'BM04_FULL' ? ' selected' : '') + '>BM04 mở rộng (kèm tác giả, DOI, giải thưởng)</option><option value="SUMMARY"' + (c.template === 'SUMMARY' ? ' selected' : '') + '>Hồ sơ học thuật tóm tắt</option></select></div>' +
+    (c.template === 'SUMMARY' ? '<p class="muted small">Mẫu tóm tắt tự chọn nội dung tiêu biểu từ hồ sơ.</p>' : '<details open><summary>Các mục</summary>' + Object.keys(SEC_LABEL).map(function (k) { return '<div class="row">' + cfgChk('sections.' + k, SEC_LABEL[k]) + '<button class="btn link small" data-act="pv_goto" data-id="' + k + '">xem</button></div>'; }).join('') + '</details>' +
+      '<details><summary>Các trường mục I</summary>' + Object.keys(FIELD_LABEL).map(function (k) { return cfgChk('fields.' + k, FIELD_LABEL[k]); }).join('') + '</details>' +
+      '<details><summary>Cột công trình &amp; đề tài</summary>' + cfgChk('pubOpts.authors', 'Hiển thị danh sách tác giả') + cfgChk('pubOpts.boldMain', 'In đậm tên tác giả chính') + cfgChk('pubOpts.roles', 'Ghi vai trò (chính/liên hệ)') + cfgChk('pubOpts.indexClass', 'Ghi phân loại chỉ mục (ISI/Scopus…)') + cfgChk('pubOpts.doi', 'Ghi DOI') + cfgChk('projectOpts.internal', 'Thêm cột mã số, kết quả, kinh phí (nội bộ)') +
+      '<div class="f"><label>Thứ tự công trình</label><select data-cfgsel="pubOpts.order"><option value="desc"' + (c.pubOpts.order === 'desc' ? ' selected' : '') + '>Mới nhất trước</option><option value="asc"' + (c.pubOpts.order === 'asc' ? ' selected' : '') + '>Cũ nhất trước</option></select></div>' +
+      '<div class="f"><label>Thứ tự công tác</label><select data-cfgsel="workOrder"><option value="asc"' + (c.workOrder === 'asc' ? ' selected' : '') + '>Cũ → mới</option><option value="desc"' + (c.workOrder === 'desc' ? ' selected' : '') + '>Mới → cũ</option></select></div></details>' +
+      '<details><summary>Email, chân mẫu</summary><div class="f"><label>Email in trên hồ sơ</label><select data-cfgsel="emailChoice"><option value="contact"' + (c.emailChoice === 'contact' ? ' selected' : '') + '>Email công vụ đã xác minh (nếu có)</option><option value="google"' + (c.emailChoice === 'google' ? ' selected' : '') + '>Email tài khoản Google</option></select></div>' +
+      cfgChk('keepEmptyLines', 'Giữ các dòng trống theo mẫu khi chưa có dữ liệu') + cfgChk('signerName', 'In họ tên dưới “Người khai ký tên”') +
+      '<div class="f"><label>Địa danh</label><input type="text" data-cfgtxt="place" value="' + esc(c.place) + '" placeholder="Để trống nếu ký tay"></div><div class="f"><label>Ngày tháng</label><input type="text" data-cfgtxt="date" value="' + esc(c.date) + '" placeholder="vd: 10 tháng 10 năm 2026 (để trống nếu ký tay)"></div><p class="muted small">Phần “Xác nhận của cơ quan” và “Người khai ký tên” luôn để trống để ký.</p></details>') +
+    '<div class="f" style="margin-top:10px"><label>Tên bản xuất (lưu vào lịch sử)</label><input type="text" id="expName" value="' + esc(S.exportName || '') + '" placeholder="vd: Hồ sơ xét PGS 2026"></div>' +
+    '<div class="row" style="margin-top:10px"><button class="btn primary" id="btnDocx" data-act="exp_docx">Xuất Word (.docx)</button><button class="btn" id="btnPdf" data-act="exp_pdf">Xuất PDF</button></div></div>' +
+    '<div class="pv-wrap" id="pvWrap"><div class="pv-bar"><button class="btn" data-act="pv_zoom" data-id="-0.1">Zoom −</button><button class="btn" data-act="pv_zoom" data-id="0.1">Zoom +</button><button class="btn" data-act="pv_fit">Vừa màn hình</button><button class="btn" data-act="pv_full">Toàn màn hình</button><span class="pv-note">Bản xem trước gần đúng, file Word là bản chính thức</span></div><div class="pv-scroll" id="pvScroll"><div class="page" id="pvPage"></div></div></div></div>';
+  renderPreview(); setTimeout(ACT.pv_fit, 0);
+};
+function renderPreview() {
+  var el = $('#pvPage'); if (!el) return;
+  S.profile.account = { email: S.user.email };
+  el.innerHTML = modelToHtml(CV.buildModel(S.profile, S.exportCfg)); el.style.zoom = S.zoom;
+}
+document.addEventListener('change', function (e) {
+  var t = e.target, p = t.getAttribute && t.getAttribute('data-cfg');
+  if (p) { setPath(S.exportCfg, p, t.checked); renderPreview(); return; }
+  var sp = t.getAttribute && t.getAttribute('data-cfgsel');
+  if (sp) {
+    if (sp === 'template') { var old = S.exportCfg; S.exportCfg = CV.defaultConfig(t.value); S.exportCfg.place = old.place; S.exportCfg.date = old.date; render(); } else { setPath(S.exportCfg, sp, t.value); renderPreview(); }
+  }
+});
+document.addEventListener('input', function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-cfgtxt'); if (k) { S.exportCfg[k] = e.target.value; renderPreview(); } if (e.target.id === 'expName') S.exportName = e.target.value; });
+ACT.pv_zoom = function (d) { S.zoom = Math.max(0.4, Math.min(2, +(S.zoom + parseFloat(d)).toFixed(2))); renderPreview(); };
+ACT.pv_fit = function () { var sc = $('#pvScroll'); if (!sc) return; S.zoom = Math.max(0.4, Math.min(1.5, +((sc.clientWidth - 20) / 794).toFixed(2))); renderPreview(); };
+ACT.pv_full = function () { S.full = !S.full; var w = $('#pvWrap'); w.classList.toggle('full', S.full); setTimeout(ACT.pv_fit, 30); };
+ACT.pv_goto = function (k) { var t = $('#pvPage [data-sec="' + k + '"]'); if (t) { t.scrollIntoView({ block: 'start', behavior: 'smooth' }); } };
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.full && !$('#modalRoot').children.length) ACT.pv_full(); });
+function doExport(fmt) {
+  var btns = [$('#btnDocx'), $('#btnPdf')].filter(Boolean), labels = btns.map(function (b) { return b.textContent; });
+  btns.forEach(function (b) { b.disabled = true; }); (fmt === 'pdf' ? $('#btnPdf') : $('#btnDocx')).textContent = 'Đang tạo file…';
+  function done() { btns.forEach(function (b, i) { b.disabled = false; b.textContent = labels[i]; }); }
+  (S.dirty || S.firstRun ? saveProfile() : Promise.resolve(true)).then(function (ok) {
+    if (!ok) { done(); return; }
+    return rpc('apiExport', S.exportCfg, fmt, S.exportName || '').then(function (r) { downloadB64(r.base64, r.fileName, r.mime); S.exports = r.exports; toast('Đã xuất ' + r.fileName + ' và lưu vào Lịch sử xuất hồ sơ.'); done(); });
+  }).catch(function (e) { done(); toast(e.message, true); });
+}
+ACT.exp_docx = function () { doExport('docx'); }; ACT.exp_pdf = function () { doExport('pdf'); };
+
+/* ---------------------------------------------------------------- Lịch sử xuất */
+PAGES.history = function (root) {
+  var TPL = { BM04: 'BM04 (Bộ)', BM04_FULL: 'BM04 mở rộng', SUMMARY: 'Tóm tắt' };
+  root.innerHTML = head('Lịch sử xuất hồ sơ', 'Mỗi lần xuất lưu một <b>ảnh chụp dữ liệu</b> cùng cấu hình ẩn/hiện. Hệ thống giữ tối đa 20 bản gần nhất, tối đa 365 ngày.') +
+    '<div class="card">' + (S.exports.length ? '<div class="tscroll"><table class="t"><tr><th>Tên</th><th>Ngày</th><th>Mẫu</th><th></th></tr>' + S.exports.map(function (x) { return '<tr><td><b>' + esc(x.name) + '</b></td><td>' + fmtDT(x.createdAt) + '</td><td>' + esc(TPL[x.template] || x.template) + ' · ' + esc(x.format.toUpperCase()) + '</td><td class="right"><div class="row" style="justify-content:flex-end"><button class="btn sm" data-act="h_dl" data-id="' + x.id + '">Tải lại</button><button class="btn sm" data-act="h_cur" data-id="' + x.id + '">Xuất lại (dữ liệu hiện tại)</button><button class="btn sm" data-act="h_cfg" data-id="' + x.id + '">Sửa cấu hình</button><button class="btn sm" data-act="h_ren" data-id="' + x.id + '">Đổi tên</button><button class="btn sm danger" data-act="h_del" data-id="' + x.id + '">Xoá</button></div></td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có bản xuất nào.</div>') + '</div>';
+};
+function reexport(id, mode, b) { b.disabled = true; rpc('apiReexport', id, mode).then(function (r) { downloadB64(r.base64, r.fileName, r.mime); b.disabled = false; toast('Đã tạo ' + r.fileName); }).catch(function (e) { b.disabled = false; toast(e.message, true); }); }
+ACT.h_dl = function (id, b) { reexport(id, 'snapshot', b); };
+ACT.h_cur = function (id, b) { reexport(id, 'current', b); };
+ACT.h_cfg = function (id) { rpc('apiExportSnapshotProfile', id).then(function (r) { S.exportCfg = CV.mergeConfig(r.config); S.exportName = r.name; S.route = 'export'; render(); toast('Đã nạp cấu hình. Chỉnh ẩn/hiện rồi xuất lại.'); }).catch(function (e) { toast(e.message, true); }); };
+ACT.h_ren = function (id) { var x = S.exports.filter(function (e) { return e.id === id; })[0]; openForm({ title: 'Đổi tên bản xuất', rec: { name: x.name }, fields: [{ k: 'name', label: 'Tên', req: 1 }], onSave: function (r) { rpc('apiRenameExport', id, r.name).then(function (l) { S.exports = l; render(); }).catch(function (e) { toast(e.message, true); }); } }); };
+ACT.h_del = function (id) { confirmBox('Xoá bản xuất', 'Xoá bản xuất và ảnh chụp dữ liệu của nó?', 'Xoá').then(function (ok) { if (ok) rpc('apiDeleteExport', id).then(function (l) { S.exports = l; render(); }).catch(function (e) { toast(e.message, true); }); }); };
+
+/* ---------------------------------------------------------------- Quyền riêng tư */
+var CONSENT_INFO = [
+  ['profile', 'Định danh học thuật', 'Họ tên, đơn vị, chức vụ, học vị và học hàm cao nhất.'],
+  ['contact', 'Thông tin liên hệ', 'Số điện thoại, email công vụ đã xác minh, địa chỉ liên lạc.'],
+  ['education', 'Đào tạo, ngoại ngữ, công tác', 'Học vị chi tiết, ngoại ngữ, quá trình công tác.'],
+  ['projects', 'Đề tài', 'Đề tài đã/đang tham gia, kể cả mã số, kết quả, kinh phí.'],
+  ['publications', 'Công bố khoa học', 'Danh sách công bố, phân loại chỉ mục, nhãn xác minh.'],
+  ['expertise', 'Nguyện vọng và năng lực', 'Nguyện vọng, môn giảng dạy, hướng nghiên cứu, ORCID/Scopus, giải thưởng-sáng chế.']];
+PAGES.privacy = function (root) {
+  root.innerHTML = head('Quyền riêng tư', 'Mặc định quản trị <b>chỉ thấy email tài khoản</b>. Bạn bật từng nhóm dữ liệu để chia sẻ và có thể rút lại bất cứ lúc nào.') +
+    '<div class="card"><h2>Chia sẻ với quản trị của tổ chức</h2>' + CONSENT_INFO.map(function (c) { var cn = S.consent[c[0]]; return '<label class="switch"><input type="checkbox" data-consent="' + c[0] + '"' + (cn && cn.on ? ' checked' : '') + '><span><b>' + c[1] + '</b><br><span class="muted small">' + c[2] + (cn && cn.on ? ' · đồng ý từ ' + fmtDT(cn.at) : '') + '</span></span></label>'; }).join('') +
+    '<p class="muted small" style="margin-top:8px">Số CMND/CCCD không bao giờ được chia sẻ. Nếu bạn đã sửa hồ sơ, hãy bấm “Lưu” để quản trị thấy bản mới.</p></div>' +
+    '<div class="card"><h2>Quản trị đang thấy gì về bạn</h2><div id="admView" class="muted">Đang tải…</div></div>' +
+    '<div class="card"><h2>Dữ liệu của bạn</h2><div class="row"><button class="btn" data-act="dl_json">Tải toàn bộ dữ liệu (JSON)</button><button class="btn danger" data-act="del_acc">Xoá tài khoản và toàn bộ dữ liệu</button></div></div>';
+  loadAdminView();
+};
+function kv(k, v) { return v ? '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>' : ''; }
+function loadAdminView() {
+  rpc('apiMyAdminPreview').then(function (r) {
+    var v = r.view, el = $('#admView'); if (!el) return;
+    var cnt = function (a) { return a ? a.length + ' mục' : ''; };
+    el.className = ''; el.innerHTML = '<dl class="kvl">' + kv('Tài khoản', v.email) + kv('Họ tên', v.name) + kv('Đơn vị / chức vụ', [v.workplace, v.position].filter(Boolean).join(' – ')) + kv('Học vị / học hàm', [v.highestDegree, v.highestTitle].filter(Boolean).join(', ')) +
+      kv('Điện thoại', v.phones) + kv('Email liên hệ', v.contactEmail) + kv('Địa chỉ', v.address) + kv('Đào tạo', cnt(v.degrees)) + kv('Công tác', cnt(v.work)) + kv('Đề tài', cnt(v.projects)) + kv('Công bố', cnt(v.pubs)) + kv('Hướng nghiên cứu', cnt(v.directions)) + kv('Môn giảng dạy', cnt(v.courses)) + '</dl>' +
+      (v.consent && v.consent.length ? '' : '<p class="muted small">Chưa chia sẻ nhóm dữ liệu nào: quản trị chỉ thấy tài khoản.</p>') +
+      '<p class="small muted" style="margin-top:8px">Quản trị của tổ chức bạn: ' + (r.admins.length ? esc(r.admins.join(', ')) : 'chưa có') + '</p>' +
+      (r.invites.length ? '<h3 style="margin-top:12px">Lời mời/thư kết nối bạn đã nhận</h3><ul class="small">' + r.invites.map(function (i) { return '<li>' + fmtDT(i.createdAt) + ' · từ ' + esc(i.from) + ' · ' + esc(i.subject) + '</li>'; }).join('') + '</ul>' : '');
+  }).catch(function (e) { var el = $('#admView'); if (el) el.textContent = e.message; });
+}
+document.addEventListener('change', function (e) {
+  if (!(e.target.getAttribute && e.target.getAttribute('data-consent'))) return;
+  var next = {}; CONSENT_INFO.forEach(function (c) { var el = $('[data-consent="' + c[0] + '"]'); next[c[0]] = el.checked; });
+  (S.firstRun ? saveProfile() : Promise.resolve(true)).then(function (ok) {
+    if (!ok) return;
+    return rpc('apiSaveConsent', next).then(function (cn) { S.consent = cn; toast('Đã cập nhật chia sẻ.'); loadAdminView(); });
+  }).catch(function (er) { toast(er.message, true); render(); });
+});
+ACT.dl_json = function () { var p = JSON.parse(JSON.stringify(S.profile)); delete p.account; downloadText(JSON.stringify(p, null, 2), 'ho-so-ly-lich-khoa-hoc.json', 'application/json'); };
+ACT.del_acc = function () {
+  var m = openModal('<header><h2>Xoá tài khoản</h2></header><div class="body"><div class="alert warn">Hồ sơ, lịch sử xuất hồ sơ và mọi thiết lập chia sẻ sẽ bị xoá vĩnh viễn. Nhật ký truy cập được ẩn danh.</div><div class="f"><label for="delEm">Nhập email của bạn để xác nhận</label><input id="delEm" type="text" placeholder="' + esc(S.user.email) + '"><div class="err"></div></div></div><footer><button class="btn" data-close>Huỷ</button><button class="btn danger" id="delGo">Xoá vĩnh viễn</button></footer>', { onEnter: go });
+  function go() { rpc('apiDeleteAccount', $('#delEm', m.root).value).then(function () { S.dirty = false; clearDraft(); m.close(); $('#app').innerHTML = '<div class="boot"><h2>Đã xoá tài khoản</h2><p>Toàn bộ dữ liệu của bạn đã bị xoá. Bạn có thể đóng trang này.</p></div>'; }).catch(function (e) { $('.err', m.root).textContent = e.message; }); }
+  $('#delGo', m.root).onclick = go;
+};
+
+/* ---------------------------------------------------------------- Hỗ trợ */
+PAGES.help = function (root) {
+  root.innerHTML = head('Hỗ trợ', 'Những câu hỏi thường gặp.') + '<div class="card">' + [
+    ['Dữ liệu của tôi có an toàn không?', 'Dữ liệu lưu trong Google Sheet thuộc tổ chức triển khai. Số giấy tờ được mã hoá. Quản trị chỉ thấy các nhóm dữ liệu bạn đồng ý chia sẻ, và mọi lần xem đều được ghi nhật ký.'],
+    ['Học vị cao nhất được tính thế nào?', 'Tự suy ra từ mục Quá trình đào tạo: bậc cao nhất, nếu cùng bậc thì lấy năm mới nhất. Chức danh cao nhất tính từ mục học hàm (GS cao hơn PGS).'],
+    ['Công bố không có DOI thì sao?', 'Dùng “Thêm thủ công”. Bạn nên chọn “Phân loại chỉ mục” (ISI/Scopus, quốc tế khác, trong nước) để quản trị lọc đúng.'],
+    ['Tôi sửa trên hai thiết bị thì sao?', 'Hệ thống phát hiện bản trên máy chủ mới hơn và hỏi bạn ghi đè hay tải bản mới. Bản nháp chưa lưu được giữ trên máy bạn.'],
+    ['File Word hiển thị lệch so với xem trước?', 'Xem trước chỉ gần đúng; file Word là bản chính thức. Hãy mở file bằng Microsoft Word hoặc Google Docs để kiểm tra trước khi nộp.'],
+    ['Phím tắt', 'Ctrl+S: lưu · Enter: lưu hộp thoại · Esc: đóng hộp thoại.']
+  ].map(function (q) { return '<h3 style="margin-top:12px">' + q[0] + '</h3><p class="muted">' + q[1] + '</p>'; }).join('') + '</div>';
+};
+</script>

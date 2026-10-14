@@ -1,0 +1,192 @@
+<script>
+/* =====================  PHÂN HỆ ADMIN & QUẢN TRỊ HỆ THỐNG  ===================== */
+var NEEDS = [['giangDay', 'Thỉnh giảng'], ['hoiDong', 'Hội đồng khoa học'], ['nghienCuu', 'Nghiên cứu chung'], ['huongDan', 'Hướng dẫn luận văn/án'], ['tuVan', 'Tư vấn doanh nghiệp']];
+var AF = { q: '', unit: '', major: '', needs: [], needsMode: 'any', title: '', minDegree: '', leadMin: '', leadLevel: '', intlMin: '', domMin: '', verifiedOnly: false };
+
+function selOpts(arr, cur, blank) { return (blank != null ? '<option value="">' + blank + '</option>' : '') + arr.map(function (o) { var v = o.v != null ? o.v : o, l = o.l != null ? o.l : o; return '<option value="' + esc(v) + '"' + (cur === v ? ' selected' : '') + '>' + esc(l) + '</option>'; }).join(''); }
+function stBadge(s) { return s ? '<span class="tag ok">' + s.intl + ' QT' + (s.intlVerified ? ' (' + s.intlVerified + ' ✓)' : '') + '</span><span class="tag">' + s.dom + ' trong nước</span><span class="tag">' + (s.lead ? Object.keys(s.lead).reduce(function (a, k) { return a + s.lead[k]; }, 0) : 0) + ' chủ nhiệm</span>' : ''; }
+
+/* ---------------------------------------------------------------- Tìm & lọc */
+PAGES.a_search = function (root) {
+  var f = AF, r = S.adm.results;
+  root.innerHTML = head('Tìm & lọc thành viên', 'Chỉ hiện thành viên trong tổ chức của bạn và chỉ các trường họ đã đồng ý chia sẻ. Mọi lần tìm, xem, xuất danh sách đều được ghi nhật ký.') +
+    '<div class="card"><div class="filters">' +
+    '<div class="f"><label>Tên / email</label><input type="text" data-af="q" value="' + esc(f.q) + '"></div>' +
+    '<div class="f"><label>Đơn vị</label><input type="text" data-af="unit" value="' + esc(f.unit) + '"></div>' +
+    '<div class="f"><label>Chuyên ngành / hướng nghiên cứu</label><input type="text" data-af="major" value="' + esc(f.major) + '"></div>' +
+    '<div class="f"><label>Học hàm</label><select data-af="title">' + selOpts([{ v: 'any', l: 'Có học hàm' }, { v: 'GS', l: 'Giáo sư' }, { v: 'PGS', l: 'Phó giáo sư' }, { v: 'none', l: 'Chưa có học hàm' }], f.title, 'Tất cả') + '</select></div>' +
+    '<div class="f"><label>Học vị tối thiểu</label><select data-af="minDegree">' + selOpts(['Cử nhân', 'Thạc sĩ', 'Tiến sĩ'], f.minDegree, 'Tất cả') + '</select></div>' +
+    '<div class="f"><label>Số đề tài chủ nhiệm ≥</label><input type="text" data-af="leadMin" value="' + esc(f.leadMin) + '" inputmode="numeric"></div>' +
+    '<div class="f"><label>Cấp đề tài</label><select data-af="leadLevel">' + selOpts(CV.LEVELS, f.leadLevel, 'Mọi cấp') + '</select></div>' +
+    '<div class="f"><label>Bài quốc tế ≥</label><input type="text" data-af="intlMin" value="' + esc(f.intlMin) + '" inputmode="numeric"></div>' +
+    '<div class="f"><label>Bài trong nước ≥</label><input type="text" data-af="domMin" value="' + esc(f.domMin) + '" inputmode="numeric"></div>' +
+    '<div class="f full" style="grid-column:span 2"><label>Nhu cầu</label><div class="row">' + NEEDS.map(function (n) { return '<label class="chk"><input type="checkbox" data-afneed="' + n[0] + '"' + (f.needs.indexOf(n[0]) >= 0 ? ' checked' : '') + '><span>' + n[1] + '</span></label>'; }).join('') + '</div></div>' +
+    '<div class="f"><label>Khớp nhu cầu</label><select data-af="needsMode">' + selOpts([{ v: 'any', l: 'Bất kỳ' }, { v: 'all', l: 'Tất cả' }], f.needsMode) + '</select></div>' +
+    '<div class="f"><label class="chk" style="margin-top:22px"><input type="checkbox" data-afchk="verifiedOnly"' + (f.verifiedOnly ? ' checked' : '') + '><span>Chỉ tính công bố đã xác minh DOI</span></label></div></div>' +
+    '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="a_run">Tìm kiếm</button><button class="btn" data-act="a_reset">Xoá bộ lọc</button></div></div>' +
+    (r ? '<div class="card"><div class="row" style="margin-bottom:10px"><b>' + r.length + ' thành viên</b><span class="muted small">Nhãn “✓” = đã xác minh qua DOI; còn lại là tự khai.</span><span class="spacer"></span><button class="btn sm" data-act="a_mail">Gửi thư cho mục đã chọn</button><button class="btn sm" data-act="a_to_council">Kiểm tra hội đồng</button><button class="btn sm" data-act="a_csv">Xuất danh sách (CSV)</button></div>' +
+      (r.length ? '<div class="tscroll"><table class="t"><tr><th><input type="checkbox" id="selAll"></th><th>Thành viên</th><th>Học vị/hàm</th><th>Năng lực</th><th>Liên hệ</th><th></th></tr>' + r.map(function (m) {
+        return '<tr><td><input type="checkbox" data-sel="' + esc(m.email) + '"' + (S.adm.sel[m.email] ? ' checked' : '') + '></td><td><b>' + esc(m.name || m.email) + '</b><br><span class="muted small">' + esc(m.name ? m.email : '') + (m.workplace ? '<br>' + esc(m.workplace) : '') + '</span></td><td>' + esc([m.highestTitle, m.highestDegree].filter(Boolean).join(', ')) + '</td><td>' + stBadge(m.stats) + (m.aspirations ? '<br>' + NEEDS.filter(function (n) { return m.aspirations[n[0]]; }).map(function (n) { return '<span class="tag">' + n[1] + '</span>'; }).join('') : '') + '</td><td class="small">' + esc(m.phones) + (m.contactEmail ? '<br>' + esc(m.contactEmail) : '') + (!m.phones && !m.contactEmail ? '<span class="muted">Chưa chia sẻ</span>' : '') + '</td><td class="right" style="white-space:nowrap">' + (m.blocked ? '<span class="tag bad">Đã chặn</span> ' : '') + '<button class="btn sm" data-act="a_view" data-id="' + esc(m.email) + '">Chi tiết</button> <button class="btn sm' + (m.blocked ? '' : ' danger') + '" data-act="' + (m.blocked ? 'a_unblock' : 'a_block') + '" data-id="' + esc(m.email) + '">' + (m.blocked ? 'Gỡ chặn' : 'Chặn') + '</button></td></tr>';
+      }).join('') + '</table></div>' : '<div class="empty">Không có thành viên khớp. Lưu ý: người chưa chia sẻ dữ liệu chỉ hiện khi bạn không lọc theo các trường đó.</div>') + '</div>' : '');
+  var sa = $('#selAll'); if (sa) sa.onchange = function () { $$('[data-sel]').forEach(function (c) { c.checked = sa.checked; S.adm.sel[c.dataset.sel] = sa.checked; }); };
+};
+document.addEventListener('input', function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-af'); if (k) AF[k] = e.target.value; });
+document.addEventListener('change', function (e) {
+  var t = e.target, k = t.getAttribute && t.getAttribute('data-af'); if (k) AF[k] = t.value;
+  var n = t.getAttribute && t.getAttribute('data-afneed'); if (n) { AF.needs = AF.needs.filter(function (x) { return x !== n; }); if (t.checked) AF.needs.push(n); }
+  var c = t.getAttribute && t.getAttribute('data-afchk'); if (c) AF[c] = t.checked;
+  var s = t.getAttribute && t.getAttribute('data-sel'); if (s) S.adm.sel[s] = t.checked;
+});
+ACT.a_run = function (id, btn) {
+  btn.disabled = true; btn.textContent = 'Đang tìm…';
+  rpc('apiAdminSearch', AF).then(function (r) { S.adm.results = r; render(); }).catch(function (e) { toast(e.message, true); btn.disabled = false; btn.textContent = 'Tìm kiếm'; });
+};
+ACT.a_reset = function () { AF = { q: '', unit: '', major: '', needs: [], needsMode: 'any', title: '', minDegree: '', leadMin: '', leadLevel: '', intlMin: '', domMin: '', verifiedOnly: false }; S.adm.results = null; render(); };
+function selectedEmails() { return Object.keys(S.adm.sel).filter(function (k) { return S.adm.sel[k]; }); }
+ACT.a_view = function (email) {
+  rpc('apiAdminMember', email).then(function (v) {
+    var cnt = function (a) { return a ? a.length : 0; };
+    var body = '<dl class="kvl">' + kv('Tài khoản', v.email) + kv('Họ tên', v.name) + kv('Đơn vị', v.workplace) + kv('Chức vụ', v.position) + kv('Học vị', v.highestDegree) + kv('Học hàm', v.highestTitle + (v.titleMajor ? ' (' + v.titleMajor + ')' : '')) + kv('Điện thoại', v.phones) + kv('Email liên hệ', v.contactEmail) + kv('Địa chỉ', v.address) + kv('ORCID', v.orcid) + kv('Scopus', v.scopusId) + kv('Google Scholar', v.scholar) + '</dl>';
+    if (v.aspirations) body += '<h3 style="margin-top:12px">Nguyện vọng</h3>' + NEEDS.filter(function (n) { return v.aspirations[n[0]]; }).map(function (n) { return '<span class="tag">' + n[1] + '</span>'; }).join('');
+    if (v.directions && v.directions.length) body += '<h3 style="margin-top:12px">Hướng nghiên cứu</h3><ul>' + v.directions.map(function (d) { return '<li>' + esc(d.name) + ' <span class="muted small">' + esc(d.keywords) + '</span></li>'; }).join('') + '</ul>';
+    if (v.degrees && v.degrees.length) body += '<h3 style="margin-top:12px">Đào tạo</h3><ul>' + v.degrees.map(function (d) { return '<li>' + esc(d.degree) + ' – ' + esc(d.major) + ', ' + esc(d.institution) + ' (' + esc(d.year) + ')</li>'; }).join('') + '</ul>';
+    if (v.projects && v.projects.length) body += '<h3 style="margin-top:12px">Đề tài (' + v.projects.length + ')</h3><ul>' + v.projects.slice(0, 12).map(function (p) { return '<li>' + esc(p.name) + ' <span class="muted small">(' + esc(p.level) + ', ' + esc(p.role) + ', ' + esc(CV.fmtYears(p)) + (p.code ? ', mã ' + esc(p.code) : '') + (p.result ? ', ' + esc(p.result) : '') + (p.funding ? ', ' + esc(p.funding) : '') + ')</span></li>'; }).join('') + '</ul>';
+    if (v.pubs && v.pubs.length) body += '<h3 style="margin-top:12px">Công bố (' + v.pubs.length + ') ' + stBadge(v.stats) + '</h3><ul>' + v.pubs.slice(0, 15).map(function (p) { return '<li>' + esc(p.title) + ' <span class="muted small">(' + esc(p.year) + ', ' + esc(p.venue) + ') ' + (p.verified ? '<span class="tag ok">đã xác minh</span>' : '<span class="tag warn">tự khai</span>') + '</span></li>'; }).join('') + '</ul>';
+    if (!v.consent.length) body += '<div class="alert info" style="margin-top:12px">Thành viên chưa chia sẻ thêm thông tin nào ngoài tài khoản.</div>';
+    openModal('<header><h2>' + esc(v.name || v.email) + '</h2><button class="x" data-close>×</button></header><div class="body">' + body + '</div><footer><button class="btn" data-close>Đóng</button></footer>', { wide: true });
+  }).catch(function (e) { toast(e.message, true); });
+};
+function mailModal(to) {
+  if (!to.length) return toast('Hãy chọn ít nhất một thành viên.', true);
+  var m = openModal('<header><h2>Gửi thư tới ' + to.length + ' thành viên</h2><button class="x" data-close>×</button></header><div class="body"><div class="f"><label>Loại</label><select id="mk"><option value="invite">Lời mời kết nối</option><option value="message">Thông báo</option></select></div><div class="f" style="margin-top:8px"><label for="ms">Tiêu đề</label><input id="ms" type="text"></div><div class="f" style="margin-top:8px"><label for="mb">Nội dung</label><textarea id="mb" rows="7"></textarea></div><p class="muted small">Thư gửi từ hệ thống, thành viên trả lời trực tiếp cho email của bạn. Việc gửi được ghi nhật ký.</p><div class="err" style="color:var(--bad)"></div></div><footer><button class="btn" data-close>Huỷ</button><button class="btn primary" id="mgo">Gửi</button></footer>');
+  $('#mgo', m.root).onclick = function () {
+    var b = this; b.disabled = true;
+    rpc('apiAdminSendMail', { to: to, subject: $('#ms', m.root).value, body: $('#mb', m.root).value, kind: $('#mk', m.root).value }).then(function (r) { m.close(); toast('Đã gửi ' + r.sent + ' thư.'); }).catch(function (e) { b.disabled = false; $('.err', m.root).textContent = e.message; });
+  };
+}
+ACT.a_mail = function () { mailModal(selectedEmails()); };
+ACT.a_to_council = function () { var s = selectedEmails(); if (!s.length) return toast('Hãy chọn ít nhất một thành viên.', true); S.route = 'a_council'; render(); };
+ACT.a_csv = function () {
+  var r = S.adm.results || []; if (!r.length) return;
+  var rows = [['Họ tên', 'Email tài khoản', 'Đơn vị', 'Học vị', 'Học hàm', 'Điện thoại', 'Email liên hệ', 'Bài quốc tế', 'Bài trong nước', 'Chủ nhiệm đề tài']];
+  r.forEach(function (m) { rows.push([m.name, m.email, m.workplace, m.highestDegree, m.highestTitle, m.phones, m.contactEmail, m.stats.intl, m.stats.dom, Object.keys(m.stats.lead).reduce(function (a, k) { return a + m.stats.lead[k]; }, 0)]); });
+  var csv = '﻿' + rows.map(function (x) { return x.map(function (c) { c = String(c == null ? '' : c); if (/^[=+\-@]/.test(c)) c = "'" + c; return '"' + c.replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
+  rpc('apiAdminExportLog', r.length, AF).then(function () { downloadText(csv, 'danh-sach-thanh-vien.csv', 'text/csv;charset=utf-8'); }).catch(function (e) { toast(e.message, true); });
+};
+
+/* ---------------------------------------------------------------- Chặn / gỡ chặn tài khoản */
+var BLK = { list: null };
+function markBlocked(email, on) { (S.adm.results || []).forEach(function (r) { if (String(r.email).toLowerCase() === String(email).toLowerCase()) r.blocked = on; }); }
+function blockModal(email, after) {
+  var m = openModal('<header><h2>Chặn tài khoản</h2><button class="x" data-close aria-label="Đóng">×</button></header><div class="body"><p>Tài khoản <b>' + esc(email) + '</b> sẽ không đăng nhập hoặc dùng được ứng dụng nữa, kể cả phiên đang mở. Dữ liệu của họ được giữ nguyên và bạn có thể gỡ chặn bất cứ lúc nào.</p><div class="f"><label for="blr">Lý do (không bắt buộc)</label><input id="blr" type="text" maxlength="200" placeholder="vd: tài khoản rác"></div><div class="err" style="color:var(--bad)"></div></div><footer><button class="btn" data-close>Huỷ</button><button class="btn danger" id="blgo">Chặn tài khoản</button></footer>', { onEnter: function () { $('#blgo', m.root).click(); } });
+  $('#blgo', m.root).onclick = function () {
+    var b = this; b.disabled = true;
+    rpc('apiAdminBlock', email, $('#blr', m.root).value).then(function (l) { m.close(); toast('Đã chặn ' + email + '.'); if (after) after(l); }).catch(function (e) { b.disabled = false; $('.err', m.root).textContent = e.message; });
+  };
+  $('#blr', m.root).focus();
+}
+ACT.a_block = function (email) { blockModal(email, function () { markBlocked(email, true); render(); }); };
+ACT.a_unblock = function (email) {
+  confirmBox('Gỡ chặn tài khoản', email + ' sẽ đăng nhập và dùng ứng dụng lại bình thường.', 'Gỡ chặn').then(function (ok) {
+    if (!ok) return;
+    rpc('apiAdminUnblock', email).then(function () { markBlocked(email, false); toast('Đã gỡ chặn ' + email + '.'); render(); }).catch(function (e) { toast(e.message, true); });
+  });
+};
+PAGES.a_block = function (root) {
+  root.innerHTML = head('Tài khoản bị chặn', 'Chặn tài khoản rác hoặc lạm dụng. Tài khoản bị chặn không đăng nhập được và phiên đang mở bị ngắt ở thao tác kế tiếp. Dữ liệu không bị xoá; bạn có thể gỡ chặn bất cứ lúc nào. Mọi thao tác được ghi nhật ký.') +
+    '<div class="card"><h2>Chặn tài khoản</h2><div class="grid"><div class="f"><label for="blkEmail">Email tài khoản</label><input id="blkEmail" type="text" placeholder="ten@gmail.com" autocomplete="off"></div><div class="f"><label for="blkWhy">Lý do (không bắt buộc)</label><input id="blkWhy" type="text" maxlength="200" placeholder="vd: tài khoản rác"></div></div>' +
+    '<p class="muted small" style="margin:10px 0 0">Quản trị theo tổ chức chỉ chặn được tài khoản thuộc tổ chức của mình. Tài khoản Gmail và các email công cộng khác do Quản trị hệ thống xử lý. Không chặn được quản trị viên.</p>' +
+    '<div class="row" style="margin-top:12px"><button class="btn danger" data-act="blk_add">Chặn tài khoản</button></div></div><div class="card" id="blkBox">Đang tải…</div>';
+  rpc('apiAdminBlockList').then(function (l) { BLK.list = l; drawBlocked(); }).catch(function (e) { var b = $('#blkBox'); if (b) b.textContent = e.message; });
+};
+function drawBlocked() {
+  var box = $('#blkBox'); if (!box) return; var l = BLK.list || [];
+  box.innerHTML = '<h2>Đang bị chặn (' + l.length + ')</h2>' + (l.length ? '<div class="tscroll"><table class="t"><tr><th>Tài khoản</th><th>Lý do</th><th>Người chặn</th><th>Thời gian</th><th></th></tr>' + l.map(function (b) {
+    return '<tr><td><b>' + esc(b.email) + '</b></td><td>' + (b.reason ? esc(b.reason) : '<span class="muted">(không ghi)</span>') + '</td><td class="small">' + esc(b.by) + '</td><td class="small" style="white-space:nowrap">' + fmtDT(b.at) + '</td><td class="right"><button class="btn sm" data-act="blk_rm" data-id="' + esc(b.email) + '">Gỡ chặn</button></td></tr>';
+  }).join('') + '</table></div>' : '<div class="empty">Chưa có tài khoản nào bị chặn.</div>');
+}
+ACT.blk_add = function (id, btn) {
+  var em = $('#blkEmail').value.trim(); if (!em) return toast('Hãy nhập email tài khoản cần chặn.', true);
+  btn.disabled = true;
+  rpc('apiAdminBlock', em, $('#blkWhy').value).then(function (l) { BLK.list = l; markBlocked(em, true); $('#blkEmail').value = ''; $('#blkWhy').value = ''; drawBlocked(); toast('Đã chặn ' + em.toLowerCase() + '.'); }).catch(function (e) { toast(e.message, true); }).then(function () { btn.disabled = false; });
+};
+ACT.blk_rm = function (email) {
+  rpc('apiAdminUnblock', email).then(function (l) { BLK.list = l; markBlocked(email, false); drawBlocked(); toast('Đã gỡ chặn ' + email + '.'); }).catch(function (e) { toast(e.message, true); });
+};
+
+/* ---------------------------------------------------------------- Ghép nối */
+var MQ = { q: '', mode: 'research', res: null };
+function hl(text, words) { var t = esc(text); (words || []).forEach(function (w) { try { t = t.replace(new RegExp('(' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<mark>$1</mark>'); } catch (e) { } }); return t; }
+PAGES.a_match = function (root) {
+  root.innerHTML = head('Ghép nối đồng đội & tư vấn doanh nghiệp', 'Tìm theo từ khoá trên hướng nghiên cứu, từ khoá, tên đề tài và bài báo của người đã chia sẻ. Kết quả xếp hạng kèm <b>lý do gợi ý</b>; điểm chỉ để sắp thứ tự, không phải xác suất.') +
+    '<div class="card"><div class="f"><label>Chế độ</label><select id="mqMode"><option value="research"' + (MQ.mode === 'research' ? ' selected' : '') + '>Tìm đồng đội nghiên cứu</option><option value="business"' + (MQ.mode === 'business' ? ' selected' : '') + '>Tư vấn doanh nghiệp (ưu tiên sáng chế, đề tài ứng dụng, nguyện vọng tư vấn)</option></select></div>' +
+    '<div class="f" style="margin-top:10px"><label for="mqText">' + (MQ.mode === 'business' ? 'Mô tả bài toán của doanh nghiệp' : 'Mô tả hướng nghiên cứu / từ khoá') + '</label><textarea id="mqText" rows="4" placeholder="vd: tối ưu hoá chuỗi cung ứng lạnh bằng học máy, dự báo nhu cầu…">' + esc(MQ.q) + '</textarea></div>' +
+    '<div class="row" style="margin-top:10px"><button class="btn primary" data-act="mq_go">Tìm chuyên gia</button><span class="muted small">Tìm theo từ khoá không dấu, cả tiếng Việt lẫn tiếng Anh (chưa phải tìm theo ngữ nghĩa/embedding).</span></div></div>' +
+    (MQ.res ? (MQ.res.length ? MQ.res.map(function (r) { return '<div class="match"><div class="row"><b>#' + r.rank + ' ' + esc(r.name || r.email) + '</b><span class="muted small">' + esc([r.highestTitle, r.highestDegree].filter(Boolean).join(', ')) + (r.workplace ? ' · ' + esc(r.workplace) : '') + '</span>' + (r.tuVan ? '<span class="tag ok">Sẵn sàng tư vấn</span>' : '') + '<span class="spacer"></span><button class="btn sm" data-act="a_view" data-id="' + esc(r.email) + '">Chi tiết</button><button class="btn sm" data-act="mq_mail" data-id="' + esc(r.email) + '">Gửi lời mời</button></div>' +
+      '<div class="small" style="margin-top:4px">Từ khoá trùng: ' + (r.keywords.length ? r.keywords.map(function (k) { return '<span class="tag">' + esc(k) + '</span>'; }).join('') : '—') + '</div><ul class="why">' + r.reasons.map(function (x) { return '<li><b>' + esc(x.label) + ':</b> ' + hl(x.text, x.hits) + '</li>'; }).join('') + '</ul></div>'; }).join('') : '<div class="empty">Không tìm thấy chuyên gia phù hợp trong số người đã chia sẻ dữ liệu.</div>') : '');
+  $('#mqMode').onchange = function () { MQ.mode = this.value; MQ.q = $('#mqText').value; render(); };
+};
+ACT.mq_go = function (id, btn) { MQ.q = $('#mqText').value; btn.disabled = true; btn.textContent = 'Đang tìm…'; rpc('apiAdminMatch', MQ.q, MQ.mode).then(function (r) { MQ.res = r; render(); }).catch(function (e) { toast(e.message, true); btn.disabled = false; btn.textContent = 'Tìm chuyên gia'; }); };
+ACT.mq_mail = function (email) { mailModal([email]); };
+
+/* ---------------------------------------------------------------- Hội đồng */
+var CQ = { rule: '', res: null, extra: '' };
+PAGES.a_council = function (root) {
+  root.innerHTML = head('Kiểm tra điều kiện hội đồng', 'Quy tắc do Quản trị hệ thống cấu hình. Kết quả chỉ mang tính <b>cảnh báo</b>, không chặn.') + '<div class="card" id="cq">Đang tải quy tắc…</div>';
+  rpc('apiSysGetCouncilPublic').then(function (rules) {
+    if (!CQ.rule && rules.length) CQ.rule = rules[0].id;
+    var sel = selectedEmails();
+    $('#cq').innerHTML = '<div class="f"><label>Loại hội đồng</label><select id="cqRule">' + selOpts(rules.map(function (r) { return { v: r.id, l: r.label + ' (tối thiểu ' + r.minDegree + (r.preferTitles.length ? '; ưu tiên ' + r.preferTitles.join('/') : '') + ')' }; }), CQ.rule) + '</select></div>' +
+      '<div class="f" style="margin-top:10px"><label>Thành viên (đã chọn ở trang Tìm & lọc: ' + sel.length + ')</label><textarea id="cqExtra" rows="2" placeholder="Có thể dán thêm email, phân tách bằng dấu phẩy hoặc xuống dòng">' + esc(CQ.extra) + '</textarea></div>' +
+      '<div class="row" style="margin-top:10px"><button class="btn primary" data-act="cq_go">Kiểm tra</button></div><div id="cqRes"></div>';
+    if (CQ.res) showCouncil();
+    $('#cqRule').onchange = function () { CQ.rule = this.value; };
+  }).catch(function (e) { $('#cq').textContent = e.message; });
+};
+function showCouncil() {
+  var r = CQ.res, el = $('#cqRes'); if (!el) return; var lab = { ok: ['ok', 'Đáp ứng'], warn: ['warn', 'Cảnh báo'], unknown: ['bad', 'Thiếu dữ liệu'] };
+  el.innerHTML = '<hr style="border:0;border-top:1px solid var(--line);margin:14px 0">' + r.overall.map(function (o) { return '<div class="alert warn">' + esc(o) + '</div>'; }).join('') +
+    '<div class="tscroll"><table class="t"><tr><th>Thành viên</th><th>Học vị</th><th>Học hàm</th><th>Kết quả</th></tr>' + r.items.map(function (i) { var l = lab[i.status]; return '<tr><td>' + esc(i.name) + '</td><td>' + esc(i.degree) + '</td><td>' + esc(i.title) + '</td><td><span class="tag ' + l[0] + '">' + l[1] + '</span> <span class="small muted">' + esc(i.note) + '</span></td></tr>'; }).join('') + '</table></div><p class="muted small">' + esc(r.note) + '</p>';
+}
+ACT.cq_go = function () {
+  CQ.extra = $('#cqExtra').value;
+  var emails = selectedEmails().concat(CQ.extra.split(/[\s,;]+/).filter(function (x) { return /@/.test(x); }));
+  if (!emails.length) return toast('Chưa có thành viên nào để kiểm tra.', true);
+  rpc('apiAdminCouncil', emails, $('#cqRule').value).then(function (r) { CQ.res = r; showCouncil(); }).catch(function (e) { toast(e.message, true); });
+};
+
+/* ---------------------------------------------------------------- Nhật ký */
+PAGES.a_audit = function (root) {
+  root.innerHTML = head('Nhật ký truy cập', 'Mọi lần xem hồ sơ, tìm kiếm, xuất danh sách và gửi thư trong phạm vi tổ chức.') + '<div class="card" id="auditBox">Đang tải…</div>';
+  rpc('apiAdminAudit', 300).then(function (rows) {
+    $('#auditBox').innerHTML = rows.length ? '<div class="tscroll"><table class="t"><tr><th>Thời gian</th><th>Người thực hiện</th><th>Hành động</th><th>Đối tượng</th><th>Chi tiết</th></tr>' + rows.map(function (r) { return '<tr><td style="white-space:nowrap">' + fmtDT(r.ts) + '</td><td>' + esc(r.actor) + '</td><td><span class="tag">' + esc(r.action) + '</span></td><td>' + esc(r.target) + '</td><td class="small muted">' + esc(String(r.detail).slice(0, 160)) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có hoạt động nào.</div>';
+  }).catch(function (e) { $('#auditBox').textContent = e.message; });
+};
+
+/* ---------------------------------------------------------------- Quản trị hệ thống */
+var SYS = null, CAT_NAMES = { schools: 'Trường/đơn vị', majors: 'Ngành/chuyên ngành', countries: 'Quốc gia', ethnicities: 'Dân tộc', languages: 'Ngoại ngữ', systems: 'Hệ đào tạo' }, catSel = 'schools';
+PAGES.sys = function (root) {
+  root.innerHTML = head('Quản trị hệ thống', 'Quản lý quản trị viên theo tổ chức, danh mục dùng chung, quy tắc hội đồng và chính sách lưu giữ.') + '<div id="sysBox" class="card">Đang tải…</div>';
+  rpc('apiSysGet').then(function (d) { SYS = d; drawSys(); }).catch(function (e) { $('#sysBox').textContent = e.message; });
+};
+function drawSys() {
+  var d = SYS, box = $('#sysBox'); if (!box) return; box.className = '';
+  box.innerHTML = '<div class="card"><h2>Quản trị viên</h2><p class="muted small">Mỗi dòng: email, vai trò, các tổ chức (tên miền email, cách nhau bởi dấu phẩy). Quản trị viên chỉ xem thành viên thuộc các tổ chức này. Dùng <b>*</b> để xem mọi tổ chức. Tài khoản Gmail và email công cộng khác là tổ chức riêng (tên tổ chức là chính email đó), nên “gmail.com” không có tác dụng; muốn thấy họ hãy dùng <b>*</b> hoặc điền đúng email của họ. Người triển khai luôn là Quản trị hệ thống.</p><div id="admRows">' +
+    d.admins.map(function (a, i) { return admRow(a, i); }).join('') + '</div><div class="row"><button class="btn sm" data-act="adm_add">+ Thêm quản trị viên</button><button class="btn primary sm" data-act="adm_save">Lưu danh sách</button></div></div>' +
+    '<div class="card"><h2>Danh mục dùng chung</h2><div class="row"><select class="inp" id="catSel" style="max-width:260px">' + selOpts(Object.keys(CAT_NAMES).map(function (k) { return { v: k, l: CAT_NAMES[k] }; }), catSel) + '</select><span class="muted small">Mỗi dòng một mục. Người dùng vẫn có thể gõ giá trị khác ngoài danh mục.</span></div><textarea class="inp" id="catText" rows="10" style="margin-top:8px">' + esc((d.catalogs[catSel] || []).join('\n')) + '</textarea><div class="row" style="margin-top:8px"><button class="btn primary sm" data-act="cat_save">Lưu danh mục</button></div></div>' +
+    '<div class="card"><h2>Quy tắc hội đồng</h2><div id="ruleRows">' + d.council.map(function (r, i) { return ruleRow(r, i); }).join('') + '</div><div class="row"><button class="btn sm" data-act="rule_add">+ Thêm quy tắc</button></div>' +
+    '<h2 style="margin-top:16px">Lưu giữ lịch sử xuất</h2><div class="grid"><div class="f"><label>Số bản tối đa mỗi người</label><input type="text" id="retMax" value="' + d.retention.maxExports + '"></div><div class="f"><label>Số ngày lưu tối đa</label><input type="text" id="retDays" value="' + d.retention.days + '"></div></div><div class="row" style="margin-top:8px"><button class="btn primary sm" data-act="cfg_save">Lưu quy tắc và chính sách</button></div></div>';
+  $('#catSel').onchange = function () { SYS.catalogs[catSel] = $('#catText').value.split('\n'); catSel = this.value; drawSys(); };
+}
+function admRow(a, i) { return '<div class="grid c3 adm" data-i="' + i + '" style="margin-bottom:8px"><div class="f"><input type="text" class="a-em" value="' + esc(a.email) + '" placeholder="email"></div><div class="f"><select class="a-rl">' + selOpts([{ v: 'admin', l: 'Admin theo tổ chức' }, { v: 'sysadmin', l: 'Quản trị hệ thống' }], a.role) + '</select></div><div class="f"><div class="row"><input type="text" class="a-or" value="' + esc(a.orgs) + '" placeholder="tên miền, vd: hcmute.edu.vn" style="flex:1"><button class="btn sm danger" data-act="adm_rm" data-id="' + i + '">×</button></div></div></div>'; }
+function ruleRow(r, i) { return '<div class="grid c3 rule" style="margin-bottom:10px;align-items:end"><div class="f"><label>Tên</label><input type="text" class="r-lb" value="' + esc(r.label) + '"></div><div class="f"><label>Học vị tối thiểu</label><select class="r-md">' + selOpts(['Cử nhân', 'Thạc sĩ', 'Tiến sĩ'], r.minDegree) + '</select></div><div class="f"><label>Ưu tiên học hàm</label><select class="r-pf">' + selOpts([{ v: 'PGS,GS', l: 'PGS/GS' }, { v: 'GS', l: 'Chỉ GS' }, { v: '', l: 'Không ưu tiên' }], (r.preferTitles || []).join(',')) + '</select></div><div class="f"><label>Số người ưu tiên tối thiểu</label><input type="text" class="r-mn" value="' + (r.minPreferred || 0) + '"><input type="hidden" class="r-id" value="' + esc(r.id) + '"></div><div><button class="btn sm danger" data-act="rule_rm" data-id="' + i + '">Xoá</button></div></div>'; }
+function readAdmins() { return $$('.adm').map(function (r) { return { email: $('.a-em', r).value, role: $('.a-rl', r).value, orgs: $('.a-or', r).value }; }); }
+function readRules() { return $$('.rule').map(function (r) { return { id: $('.r-id', r).value, label: $('.r-lb', r).value, minDegree: $('.r-md', r).value, preferTitles: $('.r-pf', r).value.split(',').filter(Boolean), minPreferred: $('.r-mn', r).value }; }); }
+ACT.adm_add = function () { SYS.admins = readAdmins(); SYS.admins.push({ email: '', role: 'admin', orgs: '' }); drawSys(); };
+ACT.adm_rm = function (i) { SYS.admins = readAdmins(); SYS.admins.splice(+i, 1); drawSys(); };
+ACT.adm_save = function () { rpc('apiSysSaveAdmins', readAdmins()).then(function (l) { SYS.admins = l; drawSys(); toast('Đã lưu quản trị viên.'); }).catch(function (e) { toast(e.message, true); }); };
+ACT.cat_save = function () { rpc('apiSysSaveCatalog', catSel, $('#catText').value.split('\n')).then(function (l) { SYS.catalogs[catSel] = l; S.catalogs[catSel] = l; drawSys(); toast('Đã lưu danh mục (' + l.length + ' mục).'); }).catch(function (e) { toast(e.message, true); }); };
+ACT.rule_add = function () { SYS.council = readRules(); SYS.council.push({ id: '', label: 'Quy tắc mới', minDegree: 'Thạc sĩ', preferTitles: [], minPreferred: 0 }); drawSys(); };
+ACT.rule_rm = function (i) { SYS.council = readRules(); SYS.council.splice(+i, 1); drawSys(); };
+ACT.cfg_save = function () { rpc('apiSysSaveConfig', readRules(), { maxExports: $('#retMax').value, days: $('#retDays').value }).then(function (r) { SYS.council = r.council; SYS.retention = r.retention; drawSys(); toast('Đã lưu cấu hình.'); }).catch(function (e) { toast(e.message, true); }); };
+</script>

@@ -1,0 +1,171 @@
+<script>
+/* =====================  NHẬP TỪ CV CŨ (Word / PDF)  =====================
+ * Luồng: đồng ý -> chọn file -> máy chủ tách mục -> màn hình đối chiếu -> người dùng tick -> áp dụng vào hồ sơ (chưa lưu) -> Lưu.
+ * Không bao giờ ghi đè dữ liệu có sẵn khi chưa được hỏi; mục dạng danh sách chỉ được THÊM, không xoá/thay mục cũ. */
+var IMP_SECS = [['degrees', 'Đào tạo (học vị)'], ['titles', 'Chức danh khoa học'], ['languages', 'Ngoại ngữ'], ['work', 'Quá trình công tác'], ['projects', 'Đề tài'], ['pubs', 'Công bố khoa học'], ['awards', 'Giải thưởng, sáng chế'], ['directions', 'Hướng nghiên cứu']];
+var IMP_CONF = { high: ['Cao', 'ok'], medium: ['Trung bình', 'warn'], low: ['Cần xem lại', 'bad'] };
+var IMP_MAX = 8 * 1024 * 1024;
+function impFresh() { return { consent: false, ai: false, file: null, busy: false, res: null, name: '', sel: {}, error: '', done: null }; }
+var IMP_AI = { avail: null, loading: false };   // có cấu hình AI phía máy chủ hay chưa (hỏi một lần)
+function impAiProbe() {
+  if (IMP_AI.avail !== null || IMP_AI.loading) return;
+  IMP_AI.loading = true;
+  rpc('apiImportAiStatus').then(function (r) { IMP_AI.avail = !!(r && r.enabled); IMP_AI.name = (r && r.name) || ''; IMP_AI.lite = !!(r && r.lite); }).catch(function () { IMP_AI.avail = false; })
+    .then(function () { IMP_AI.loading = false; if (S.route === 'import' && !S.imp.busy && !S.imp.res) render(); });
+}
+S.imp = impFresh();
+
+function impList(sec) { return sec === 'directions' ? S.profile.extra.directions : S.profile[sec]; }
+function impKey(sec, it) {
+  var n = CV.norm;
+  switch (sec) {
+    case 'degrees': return n(it.degree) + '|' + (n(it.year) || n(it.institution));
+    case 'titles': return n(it.title);
+    case 'languages': return n(it.language);
+    case 'work': return n(it.from) + '|' + n(it.org).slice(0, 20);
+    case 'pubs': return n(it.doi) || n(it.title);
+    default: return n(it.name);
+  }
+}
+function impSummary(sec, it) {
+  var j = function (a, sep) { return a.filter(function (x) { return x; }).join(sep || ' · '); };
+  switch (sec) {
+    case 'degrees': return j([it.degree, it.major, it.institution, it.country, it.year]);
+    case 'titles': return j([it.title === 'GS' ? 'Giáo sư' : 'Phó giáo sư', it.year]);
+    case 'languages': return j([it.language, it.level, it.certificate]);
+    case 'work': return j([(it.from || '?') + ' – ' + (it.current ? 'nay' : (it.to || '?')), it.org, it.position]);
+    case 'projects': return j([it.name, (it.startYear || '') + (it.endYear ? '–' + it.endYear : it.ongoing ? '–nay' : ''), it.level, it.role]);
+    case 'pubs': return j([it.title, (it.authors || []).slice(0, 3).map(function (a) { return a.name; }).join(', ') + ((it.authors || []).length > 3 ? ' và cs.' : ''), it.venue, it.year, it.doi]);
+    case 'awards': return j([it.name, it.year]);
+    default: return it.name || '';
+  }
+}
+function impInitSel() {
+  var r = S.imp.res, sel = S.imp.sel = {};
+  r.fields.forEach(function (f) {
+    var cur = String(getPath(S.profile, f.path) || '');
+    f.cur = cur; f.same = !!cur && CV.norm(cur) === CV.norm(f.value);
+    sel['f:' + f.path] = !f.same && !cur && f.conf !== 'low';   // chỉ tự chọn khi ô đang trống
+  });
+  IMP_SECS.forEach(function (s) {
+    var have = {}; (impList(s[0]) || []).forEach(function (x) { have[impKey(s[0], x)] = 1; });
+    (r.items[s[0]] || []).forEach(function (x, i) { x.dup = !!have[impKey(s[0], x.item)]; sel['i:' + s[0] + ':' + i] = !x.dup && x.conf !== 'low'; });
+  });
+}
+function impCount() { var n = 0; for (var k in S.imp.sel) if (S.imp.sel[k]) n++; return n; }
+
+PAGES.import = function (root) {
+  var I = S.imp, h = head('Nhập từ CV cũ', 'Tải lên CV Word hoặc PDF để điền sẵn hồ sơ. Bạn duyệt từng mục trước khi áp dụng; dữ liệu đang có không bị ghi đè nếu bạn không chọn.');
+  impAiProbe();
+  if (I.done) {
+    root.innerHTML = h + '<div class="card"><div class="alert ok"><b>Đã áp dụng ' + I.done.f + ' thông tin và ' + I.done.i + ' mục vào hồ sơ.</b> Các thay đổi <b>chưa được lưu</b>; hãy kiểm tra lại rồi bấm Lưu.</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="impSave">Lưu hồ sơ</button><button class="btn" data-act="go" data-id="basic">Xem thông tin cơ bản</button><button class="btn" data-act="go" data-id="training">Xem đào tạo</button><button class="btn" data-act="go" data-id="pubs">Xem công bố</button><button class="btn" data-act="imp_again">Nhập thêm file khác</button></div></div>';
+    $('#impSave', root).onclick = function () { saveProfile().then(function () { }); };
+    return;
+  }
+  if (!I.res) {
+    var ready = I.consent && I.file && !I.busy, ext = I.file ? (/\.pdf$/i.test(I.file.name) ? 'PDF' : 'DOCX') : '';
+    var aiNameTxt = esc(IMP_AI.name || 'bên thứ ba');
+    var aiDetail = IMP_AI.avail ? 'Nếu bật, phần chữ của CV được gửi tới dịch vụ AI của ' + aiNameTxt + ' để tách mục. ' + (IMP_AI.lite ? 'Chỉ các mục Đào tạo, Công tác, Đề tài, Công bố và các mục sau đó được gửi; phần thông tin cá nhân (mục I: họ tên, ngày sinh, địa chỉ, giấy tờ, điện thoại...) không được gửi. Lưu ý: đây là gói miễn phí, Google có thể dùng nội dung gửi lên để cải thiện sản phẩm và người duyệt có thể đọc; tên cơ quan, tên đồng tác giả và nội dung công bố trong các mục trên vẫn nằm trong nội dung gửi.' : 'Trước khi gửi, ứng dụng cố gắng che số CMND/CCCD, số điện thoại và email; họ tên, ngày sinh, địa chỉ, nơi công tác và công trình vẫn được gửi.') + ' Bên nhận xử lý dữ liệu theo chính sách riêng của họ. Kết quả AI chỉ ở mức "Trung bình" trở xuống và bạn duyệt từng mục. Không bật thì CV chỉ được xử lý như mô tả ở mục Hướng dẫn chuẩn bị tệp.' : '';
+    var left = '<div class="card imp-main"><h2>Tải lên hồ sơ của bạn</h2><p class="lead">Chọn CV ở định dạng Word (.docx) hoặc PDF. Ưu tiên tệp có văn bản rõ ràng, có thể chọn và sao chép.</p>' +
+      '<div class="consent' + (I.consent ? ' on' : '') + '"><label class="chk"><input type="checkbox" id="impConsent"' + (I.consent ? ' checked' : '') + '><span>Tôi đồng ý tải tệp CV của tôi lên để trích xuất thông tin theo cách mô tả trong mục “Hướng dẫn chuẩn bị tệp” bên dưới.</span></label>' +
+      '<div class="sub">Tệp gốc và văn bản thô không được lưu lại' + (IMP_AI.avail ? '; mặc định không gửi cho dịch vụ AI bên ngoài.' : ', không gửi cho dịch vụ AI bên ngoài.') + '</div></div>' +
+      '<div class="dz' + (I.consent ? '' : ' off') + '" id="impDz"><div class="dz-ic">' + ico('upload', 26) + '</div><div class="dz-t">Kéo thả tệp vào đây</div><div class="dz-s">' + (I.consent ? 'hoặc chọn tệp từ máy tính của bạn' : 'Hãy tích đồng ý ở trên để chọn tệp') + '</div>' +
+      '<label class="btn primary" id="impPick"' + (I.consent && !I.busy ? '' : ' aria-disabled="true"') + '>' + ico('folder', 18) + 'Chọn tệp<input type="file" class="vh" id="impFile" accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"' + (I.consent && !I.busy ? '' : ' disabled') + '></label>' +
+      '<div class="dz-s small">.docx hoặc .pdf · tối đa 8 MB</div></div>' +
+      (I.file ? '<div class="eyebrow">Tệp đã chọn</div><div class="filechip"><span class="fc-ic">' + ico('file', 18).replace('<path', '<path') + ext + '</span><div class="fc-t"><b>' + esc(I.file.name) + '</b><span class="muted small">' + (I.busy ? 'Đang đọc tệp…' : 'Đã chọn · Chưa nhập vào hồ sơ') + ' · ' + (I.file.size / 1048576).toFixed(1) + ' MB</span></div>' + (I.busy ? '<span class="spinner" style="margin:0"></span>' : '<button type="button" class="icon-btn" data-act="imp_clear" aria-label="Bỏ tệp đã chọn">' + ico('x', 18) + '</button>') + '</div>' : '') +
+      (I.busy ? '<p class="muted small" style="margin:12px 0 0">PDF scan có thể mất 20–60 giây.' + (I.ai ? ' Đang nhờ AI tách mục, có thể thêm vài chục giây.' : '') + '</p>' : '') +
+      (I.error ? '<div class="alert warn" style="margin-top:14px">' + esc(I.error) + '</div>' : '') +
+      '<details class="acc"><summary>' + ico('help', 18) + 'Hướng dẫn chuẩn bị tệp' + '<span class="chev">' + ico('chev', 18) + '</span></summary><div class="acc-b">' +
+      '<p>Tệp .docx được đọc trực tiếp trên máy chủ của ứng dụng. Tệp PDF (kể cả bản scan, có nhận dạng chữ tiếng Việt) được chuyển <b>tạm</b> sang Google Tài liệu trong Drive của chủ hệ thống để lấy chữ, rồi <b>xoá vĩnh viễn ngay</b>. Mặc định ứng dụng <b>không dùng dịch vụ AI bên ngoài</b>' + (IMP_AI.avail ? ' (trừ khi bạn tự bật AI ở mục tuỳ chọn AI)' : '') + ', không lưu tệp gốc và không lưu văn bản thô.</p>' +
+      '<p>Tối đa 8 MB. File .doc cũ: mở bằng Word, lưu thành .docx.</p></div></details>' +
+      '<div class="page-foot"><button type="button" class="btn" data-act="go" data-id="basic">' + ico('arrowL', 18) + 'Quay lại</button><button type="button" class="btn primary lg" id="impGo"' + (ready ? '' : ' disabled') + '>Đọc tệp và tiếp tục' + ico('arrowR', 18) + '</button></div></div>';
+    var side = IMP_AI.avail ?
+      '<aside class="card aside"><div class="aside-top"><span class="aside-ic">' + ico('sparkle', 22) + '</span><span class="badge">Không bắt buộc</span></div><h3>Dùng AI để tăng độ chính xác</h3><p>Nhờ AI của ' + aiNameTxt + ' hỗ trợ tách mục khi đọc tệp.</p>' +
+      '<label class="chk"><input type="checkbox" id="impAi"' + (I.ai ? ' checked' : '') + (I.consent ? '' : ' disabled') + '><span><b>Bật AI cho lần nhập này</b>' + (I.consent ? '' : '<br><span class="muted small">Cần đồng ý ở khung bên trái trước.</span>') + '</span></label>' +
+      '<details class="acc"><summary>' + ico('info', 18) + 'Dữ liệu nào được gửi tới AI?<span class="chev">' + ico('chev', 18) + '</span></summary><div class="acc-b"><p>' + aiDetail + '</p></div></details>' +
+      '<div class="note-i">' + ico('info', 18) + '<span>Luôn kiểm tra kết quả AI và loại bỏ thông tin nhạy cảm trước khi chia sẻ hồ sơ.</span></div></aside>' :
+      '<aside class="card aside"><div class="aside-top"><span class="aside-ic">' + ico('sparkle', 22) + '</span><span class="badge">Không bắt buộc</span></div><h3>Cần hỗ trợ với hồ sơ cũ?</h3><p>Bạn có thể dùng AI để sắp xếp lại nội dung hồ sơ trước khi tạo tệp để tải lên.</p>' +
+      '<div class="promptbox"><b>Gợi ý yêu cầu cho AI</b><span>“Hãy sắp xếp nội dung lý lịch khoa học theo các mục: thông tin cá nhân, đào tạo, công tác, đề tài, công bố và giải thưởng. Giữ nguyên thông tin gốc.”</span></div>' +
+      '<div class="note-i">' + ico('info', 18) + '<span>Luôn kiểm tra kết quả AI và loại bỏ thông tin nhạy cảm trước khi chia sẻ hồ sơ.</span></div></aside>';
+    root.innerHTML = h + '<div class="imp-grid">' + left + side + '</div><p class="foot-note">Bạn có thể kiểm tra và bổ sung thông tin trong từng mục của hồ sơ.</p>';
+    $('#impConsent', root).onchange = function () { I.consent = this.checked; if (!I.consent) I.ai = false; render(); };
+    var aiBox = $('#impAi', root); if (aiBox) aiBox.onchange = function () { I.ai = this.checked; render(); };
+    var fi = $('#impFile', root); if (fi) fi.onchange = function () { impPick(this.files && this.files[0]); };
+    var dz = $('#impDz', root);
+    ['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); if (I.consent && !I.busy) dz.classList.add('drag'); }); });
+    dz.addEventListener('dragleave', function () { dz.classList.remove('drag'); });
+    dz.addEventListener('drop', function (e) { e.preventDefault(); dz.classList.remove('drag'); if (!I.consent) return toast('Hãy tích đồng ý trước khi chọn tệp.', true); if (!I.busy) impPick(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]); });
+    $('#impGo', root).onclick = function () { if (I.file && I.consent) impUpload(I.file); };
+    return;
+  }
+  var r = I.res, nF = r.fields.length, nI = 0; IMP_SECS.forEach(function (s) { nI += (r.items[s[0]] || []).length; });
+  var tag = function (c) { var t = IMP_CONF[c] || IMP_CONF.low; return '<span class="tag ' + t[1] + '">' + t[0] + '</span>'; };
+  var aiTag = function (x) { return x && x.src === 'ai' ? ' <span class="tag">AI</span>' : ''; };
+  var aiNote = (r.ai ? '<div class="alert info">Kết quả kết hợp tách theo quy tắc và AI. Mục gắn nhãn <span class="tag">AI</span> do AI đề xuất; mục "Cao" là cả hai cách cho kết quả giống nhau.' + (r.aiDropped ? ' ' + r.aiDropped + ' mục AI đề xuất đã bị loại vì không thấy trong văn bản.' : '') + (r.aiTruncated ? ' CV dài hơn giới hạn nên phần cuối chưa được AI xử lý.' : '') + '</div>' : '') + (r.aiError ? '<div class="alert warn">' + esc(r.aiError) + '</div>' : '');
+  var html = h + '<div class="card"><h2 class="sec">2. Đối chiếu kết quả — ' + esc(I.name) + '</h2>' + aiNote + '<p class="muted small" style="margin-top:-6px">' +
+    'Tìm thấy ' + nF + ' thông tin và ' + nI + ' mục' + (r.skipped ? '; có ' + r.skipped + ' dòng không nhận dạng được (hãy bổ sung thủ công)' : '') + (r.ocr ? '. PDF được nhận dạng chữ nên cần kiểm tra kỹ' : '') +
+    '. Ô được tích sẵn là dữ liệu mới có độ tin cậy từ trung bình trở lên; mục "Cần xem lại" mặc định không chọn. Bạn có thể sửa lại sau ở từng trang.</p></div>';
+  html += '<div class="card"><h2 class="sec">Thông tin cơ bản</h2>' + (nF ? '<div class="tscroll"><table class="t"><tr><th style="width:36px"></th><th>Mục</th><th>Trong hồ sơ hiện tại</th><th>Trong CV</th><th>Tin cậy</th></tr>' +
+    r.fields.map(function (f) {
+      var st = f.same ? '<span class="muted small"> (trùng)</span>' : f.cur ? ' <span class="tag warn">Sẽ ghi đè nếu chọn</span>' : '';
+      return '<tr><td><input type="checkbox" data-sel="f:' + esc(f.path) + '"' + (I.sel['f:' + f.path] ? ' checked' : '') + (f.same ? ' disabled' : '') + '></td><td>' + esc(f.label) + '</td><td>' + (f.cur ? esc(f.cur) : '<span class="muted">(trống)</span>') + '</td><td>' + esc(f.value) + st + '</td><td>' + tag(f.conf) + aiTag(f) + '</td></tr>';
+    }).join('') + '</table></div>' : '<p class="muted">Không nhận dạng được thông tin cơ bản.</p>') + '</div>';
+  IMP_SECS.forEach(function (s) {
+    var list = r.items[s[0]] || []; if (!list.length) return;
+    html += '<div class="card"><h2 class="sec sec-h">' + s[1] + ' (' + list.length + ')<span><button class="btn sm" data-act="imp_all" data-id="' + s[0] + '">Chọn tất cả mục mới</button> <button class="btn sm" data-act="imp_none" data-id="' + s[0] + '">Bỏ chọn</button></span></h2>' +
+      '<div class="tscroll"><table class="t"><tr><th style="width:36px"></th><th>Nội dung</th><th>Tin cậy</th><th>Trạng thái</th></tr>' + list.map(function (x, i) {
+        return '<tr><td><input type="checkbox" data-sel="i:' + s[0] + ':' + i + '"' + (I.sel['i:' + s[0] + ':' + i] ? ' checked' : '') + (x.dup ? ' disabled' : '') + '></td><td>' + esc(impSummary(s[0], x.item)) + '</td><td>' + tag(x.conf) + aiTag(x) + '</td><td>' + (x.dup ? '<span class="muted small">Đã có trong hồ sơ</span>' : '<span class="tag">Mới (sẽ được thêm)</span>') + '</td></tr>';
+      }).join('') + '</table></div></div>';
+  });
+  html += '<div class="card applybar"><span id="impCnt" class="muted"></span><span><button class="btn" data-act="imp_cancel">Huỷ nhập</button> <button class="btn primary" id="impApply">Áp dụng mục đã chọn</button></span></div>';
+  root.innerHTML = html;
+  var upd = function () { var n = impCount(); $('#impCnt', root).textContent = 'Đã chọn ' + n + ' mục. Chưa có gì thay đổi trong hồ sơ cho tới khi bạn bấm Áp dụng.'; $('#impApply', root).disabled = !n; };
+  $$('[data-sel]', root).forEach(function (c) { c.onchange = function () { I.sel[c.getAttribute('data-sel')] = c.checked; upd(); }; });
+  $('#impApply', root).onclick = impApply; upd();
+};
+
+function impPick(f) {
+  var I = S.imp; if (!f) return;
+  if (!/\.(docx|pdf)$/i.test(f.name)) { I.file = null; I.error = 'Chỉ nhận file .docx hoặc .pdf.'; return render(); }
+  if (f.size > IMP_MAX) { I.file = null; I.error = 'File lớn hơn 8 MB.'; return render(); }
+  I.file = f; I.error = ''; render();
+}
+function impUpload(f) {
+  var I = S.imp; if (!f) return;
+  if (!/\.(docx|pdf)$/i.test(f.name)) { I.error = 'Chỉ nhận file .docx hoặc .pdf.'; return render(); }
+  if (f.size > IMP_MAX) { I.error = 'File lớn hơn 8 MB.'; return render(); }
+  I.busy = true; I.error = ''; I.name = f.name; render();
+  var fr = new FileReader();
+  fr.onerror = function () { I.busy = false; I.error = 'Không đọc được file.'; if (S.route === 'import') render(); };
+  fr.onload = function () {
+    var b64 = String(fr.result).split(',')[1] || '';
+    rpc('apiImportCv', f.name, b64, !!(I.ai && I.consent)).then(function (res) { I.res = res; impInitSel(); }).catch(function (e) { I.error = e.message; }).then(function () { I.busy = false; if (S.route === 'import') render(); });
+  };
+  fr.readAsDataURL(f);
+}
+function impApply() {
+  var I = S.imp, r = I.res, over = [];
+  r.fields.forEach(function (f) { if (I.sel['f:' + f.path] && f.cur && !f.same) over.push(f.label + ': "' + f.cur + '" → "' + f.value + '"'); });
+  var go = function () {
+    var nf = 0, ni = 0;
+    r.fields.forEach(function (f) { if (I.sel['f:' + f.path]) { setPath(S.profile, f.path, f.value); nf++; } });
+    IMP_SECS.forEach(function (s) {
+      (r.items[s[0]] || []).forEach(function (x, i) {
+        if (!I.sel['i:' + s[0] + ':' + i] || x.dup) return;
+        var it = JSON.parse(JSON.stringify(x.item)); it.id = uid(); impList(s[0]).push(it); ni++;
+      });
+    });
+    if (!nf && !ni) return toast('Bạn chưa chọn mục nào.', true);
+    S.imp = impFresh(); S.imp.done = { f: nf, i: ni }; markDirty(); render();
+  };
+  if (over.length) confirmBox('Ghi đè dữ liệu có sẵn?', 'Bạn đã chọn ' + over.length + ' mục sẽ thay thế giá trị đang có:\n' + over.join('\n'), 'Ghi đè').then(function (ok) { if (ok) go(); });
+  else go();
+}
+function impSetSec(sec, on) { var I = S.imp; (I.res.items[sec] || []).forEach(function (x, i) { if (!x.dup) I.sel['i:' + sec + ':' + i] = on; }); render(); }
+ACT.imp_all = function (sec) { impSetSec(sec, true); };
+ACT.imp_none = function (sec) { impSetSec(sec, false); };
+ACT.imp_clear = function () { if (S.imp.busy) return; S.imp.file = null; S.imp.error = ''; render(); };
+ACT.imp_cancel = function () { S.imp = impFresh(); render(); };
+ACT.imp_again = function () { S.imp = impFresh(); render(); };
+</script>
