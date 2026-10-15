@@ -26,15 +26,15 @@ PAGES.basic = function (root) {
   root.innerHTML = head('Thông tin cơ bản', 'Mục I của mẫu lý lịch khoa học, bố cục theo từng dòng như mẫu. Dấu <span style="color:var(--bad)">*</span> là bắt buộc.') +
     '<div class="card"><h2 class="sec">I. Lý lịch sơ lược</h2>' +
     irow(fld('Họ và tên', 'basic.fullName', { req: 1, inl: 1, w: '62%' }), fld('Giới tính', 'basic.gender', { t: 'select', opts: ['Nữ', 'Nam'], inl: 1, w: '28%', cls: 'sm' })) +
-    irow(fld('Ngày, tháng, năm sinh', 'basic.dob', { v: 'date', ph: 'dd/mm/yyyy', inl: 1, w: '48%' }), fld('Nơi sinh', 'basic.pob', { list: 'geo', seg: 1, inl: 1, w: '46%', ph: 'Phường/xã, tỉnh/thành phố' })) +
-    irow(fld('Quê quán', 'basic.hometown', { list: 'geo', seg: 1, inl: 1, w: '62%', ph: 'Phường/xã, tỉnh/thành phố' }), fld('Dân tộc', 'basic.ethnicity', { list: 'ethnicities', inl: 1, w: '28%', cls: 'sm' })) +
+    irow(fld('Ngày, tháng, năm sinh', 'basic.dob', { v: 'date', ph: 'dd/mm/yyyy', inl: 1, w: '48%' }), fld('Nơi sinh', 'basic.pob', { list: 'geo', seg: 1, v: 'addr', inl: 1, w: '46%', ph: 'Phường/xã, tỉnh/thành phố' })) +
+    irow(fld('Quê quán', 'basic.hometown', { list: 'geo', seg: 1, v: 'addr', inl: 1, w: '62%', ph: 'Phường/xã, tỉnh/thành phố' }), fld('Dân tộc', 'basic.ethnicity', { list: 'ethnicities', inl: 1, w: '28%', cls: 'sm' })) +
     irow(fld('Học vị cao nhất', 'basic.hvDegree', { val: E.degree, list: 'degrees', inl: 1, w: '36%' }), fld('Năm nhận học vị', 'basic.hvYear', { val: E.year, v: 'year', list: 'years', inl: 1, w: '24%', cls: 'sm' }), fld('Nước nhận học vị', 'basic.hvCountry', { val: E.country, list: 'countries', inl: 1, w: '30%' })) +
     irow(fld('Chức danh khoa học cao nhất', 'basic.hvTitle', { val: E.title, list: 'titles', inl: 1, w: '62%' }), fld('Năm bổ nhiệm', 'basic.hvTitleYear', { val: E.titleYear, v: 'year', list: 'years', inl: 1, w: '28%', cls: 'sm' })) +
     '<p class="muted small" style="margin:-4px 0 12px">Học vị, năm, nước và chức danh được tự điền từ mục <a href="#" class="btn link" data-act="go" data-id="training">Quá trình đào tạo</a>; bạn có thể sửa trực tiếp, xoá trống để quay lại giá trị tự suy ra.</p>' +
     irow(fld('Chức vụ (hiện tại hoặc trước khi nghỉ hưu)', 'basic.position', { inl: 1, w: '100%' })) +
     irow(fld('Đơn vị công tác (hiện tại hoặc trước khi nghỉ hưu)', 'basic.workplace', { inl: 1, w: '100%' })) +
-    irow(fld('Chỗ ở riêng hoặc địa chỉ liên lạc', 'basic.address', { list: 'geo', seg: 1, inl: 1, w: '100%', hint: 'Gõ số nhà, đường; sau dấu phẩy gõ tên phường/xã để chọn gợi ý (kèm tỉnh/thành phố). Bạn có thể sửa tự do.' })) +
-    '<div class="irow"><div class="f lab-only"><label style="padding-top:9px">Điện thoại liên hệ:</label></div>' + fld('CQ', 'basic.phoneCQ', { inl: 1, w: '24%', cls: 'sm' }) + fld('NR', 'basic.phoneNR', { inl: 1, w: '24%', cls: 'sm' }) + fld('ĐĐ', 'basic.phoneDD', { inl: 1, w: '24%', cls: 'sm' }) + '</div>' +
+    irow(fld('Chỗ ở riêng hoặc địa chỉ liên lạc', 'basic.address', { list: 'geo', seg: 1, v: 'addr', inl: 1, w: '100%', hint: 'Dạng: [số nhà, đường,] phường/xã, tỉnh/thành phố. Số nhà, đường tự gõ (nếu có); phường/xã và tỉnh/thành phố phải chọn từ danh sách gợi ý.' })) +
+    '<div class="irow"><div class="f lab-only"><label style="padding-top:9px">Điện thoại liên hệ:</label></div>' + fld('CQ', 'basic.phoneCQ', { v: 'phone', ph: '10 số', inl: 1, w: '24%', cls: 'sm' }) + fld('NR', 'basic.phoneNR', { v: 'phone', ph: '10 số', inl: 1, w: '24%', cls: 'sm' }) + fld('ĐĐ', 'basic.phoneDD', { v: 'phone', ph: '10 số', inl: 1, w: '24%', cls: 'sm' }) + '</div>' +
     irow(fld('Fax', 'basic.fax', { inl: 1, w: '36%' }), fld('E-mail', 'basic.contactEmail', { v: 'email', ph: S.user.email, inl: 1, w: '54%', hint: 'Để trống = dùng email đăng nhập (' + esc(S.user.email) + '). Email khác cần xác minh. ' + ver })) +
     irow('<div class="f sm" style="--w:150px"><label>Loại</label><div class="fw"><select id="f_idDoc_type" data-bind="idDoc.type">' + [['CMND', 'CMND (cũ)'], ['CCCD', 'CCCD'], ['The can cuoc', 'Thẻ căn cước']].map(function (o) { return '<option value="' + o[0] + '"' + (P.idDoc.type === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div></div>',
       fld(idl, 'idDoc.number', { inl: 1, w: '32%', hint: 'Mã hoá khi lưu, không hiển thị cho quản trị.' }), fld('Ngày cấp', 'idDoc.issueDate', { v: 'date', ph: 'dd/mm/yyyy', inl: 1, w: '26%', cls: 'sm' })) +
@@ -73,7 +73,7 @@ PAGES.extra = function (root) {
     (X.courses.length ? '<div class="tscroll"><table class="t"><tr><th>Ngành/chuyên ngành</th><th>Tên môn</th><th>Mô tả</th><th></th></tr>' + X.courses.map(function (c) { return '<tr><td>' + esc(c.major) + '</td><td>' + esc(c.name) + '</td><td>' + esc(c.desc) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('course', c.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có môn giảng dạy nào.</div>') + '</div>' +
     '<div class="card"><div class="page-head" style="margin-bottom:8px"><h2 style="margin:0">Hướng nghiên cứu chuyên sâu</h2><button class="btn sm" data-act="dir_add">+ Thêm hướng</button></div>' +
     (X.directions.length ? '<div class="tscroll"><table class="t"><tr><th>Hướng nghiên cứu</th><th>Từ khoá</th><th></th></tr>' + X.directions.map(function (c) { return '<tr><td>' + esc(c.name) + '</td><td>' + esc(c.keywords) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('dir', c.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có hướng nghiên cứu nào. Nên nhập kèm từ khoá để việc ghép nối chính xác hơn.</div>') + '</div>' +
-    '<div class="card"><h2>Liên kết định danh học thuật</h2><div class="grid c3">' + fld('ORCID', 'extra.orcid', { ph: '0000-0000-0000-0000' }) + fld('Scopus Author ID', 'extra.scopusId') + fld('Google Scholar (URL)', 'extra.scholar') + '</div></div>';
+    '<div class="card"><h2>Liên kết định danh học thuật</h2><div class="grid c3">' + fld('ORCID', 'extra.orcid', { v: 'orcid', ph: '0000-0000-0000-0000' }) + fld('Scopus Author ID', 'extra.scopusId') + fld('Google Scholar (URL)', 'extra.scholar') + '</div></div>';
 };
 /* extra.* là mảng lồng: dùng helper riêng */
 function upsertX(key, rec) { var arr = S.profile.extra[key], i = arr.map(function (x) { return x.id; }).indexOf(rec.id); if (i >= 0) arr[i] = rec; else arr.push(rec); markDirty(); render(); }
@@ -159,6 +159,7 @@ function moveLang(id, d) { var a = S.profile.languages, i = a.map(function (x) {
 ACT.lang_up = function (id) { moveLang(id, -1); }; ACT.lang_down = function (id) { moveLang(id, 1); };
 
 /* ---------------------------------------------------------------- Quá trình công tác */
+function workCheck(r) { var a = CV.monthIdx(r.from), b = CV.monthIdx(r.to); return (!r.current && a != null && b != null && b < a) ? { to: 'Thời điểm kết thúc không được trước thời điểm bắt đầu.' } : {}; }
 var WORK_FIELDS = [
   { k: 'from', label: 'Từ (tháng/năm)', v: 'monthyear', req: 1, ph: 'mm/yyyy', full: false },
   { k: 'to', label: 'Đến (tháng/năm)', v: 'monthyear', ph: 'mm/yyyy', full: false, show: function (r) { return !r.current; }, req: 1 },
@@ -171,16 +172,20 @@ PAGES.work = function (root) {
   root.innerHTML = head('Quá trình công tác', 'Mục III của mẫu: xuất 3 cột Thời gian, Nơi công tác, Công việc đảm nhiệm.', '<button class="btn primary" data-act="work_add">+ Thêm giai đoạn</button>') + warnBox('work') +
     '<div class="card">' + (list.length ? '<div class="tscroll"><table class="t"><tr><th>Thời gian</th><th>Nơi công tác</th><th>Công việc đảm nhiệm</th><th></th></tr>' + list.map(function (w) { return '<tr><td style="white-space:nowrap">' + esc(CV.fmtPeriod(w)) + '</td><td>' + esc(w.org) + (w.position ? '<br><span class="muted small">' + esc(w.position) + '</span>' : '') + '</td><td>' + esc(w.duties) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('work', w.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có quá trình công tác. Thêm giai đoạn công tác.</div>') + '</div>';
 };
-ACT.work_add = function () { openForm({ title: 'Thêm giai đoạn công tác', rec: { id: uid() }, fields: WORK_FIELDS, onSave: function (r) { upsert('work', r); } }); };
-ACT.work_edit = function (id) { openForm({ title: 'Sửa giai đoạn công tác', rec: findById(S.profile.work, id), fields: WORK_FIELDS, onSave: function (r) { upsert('work', r); } }); };
+ACT.work_add = function () { openForm({ title: 'Thêm giai đoạn công tác', rec: { id: uid() }, fields: WORK_FIELDS, check: workCheck, onSave: function (r) { upsert('work', r); } }); };
+ACT.work_edit = function (id) { openForm({ title: 'Sửa giai đoạn công tác', rec: findById(S.profile.work, id), fields: WORK_FIELDS, check: workCheck, onSave: function (r) { upsert('work', r); } }); };
 ACT.work_del = function (id) { delItem('work', id, 'giai đoạn công tác'); };
 
 /* ---------------------------------------------------------------- Đề tài */
+function prjCheck(r) { return (!r.ongoing && CV.num(r.startYear) && CV.num(r.endYear) && CV.num(r.endYear) < CV.num(r.startYear)) ? { endYear: 'Năm hoàn thành không được trước năm bắt đầu.' } : {}; }
+function rankCell(p) { return p.ongoing ? '<span class="muted">Đang thực hiện</span>' : (p.accepted && p.rank ? '<span class="tag ok">' + esc(p.rank) + '</span>' : '<span class="muted">' + CV.RANK_NONE + '</span>'); }
 var PRJ_FIELDS = [
   { k: 'name', label: 'Tên đề tài', t: 'area', rows: 2, req: 1 },
   { k: 'startYear', label: 'Năm bắt đầu', v: 'year', req: 1, full: false, ph: 'yyyy' },
   { k: 'endYear', label: 'Năm hoàn thành', v: 'year', full: false, ph: 'yyyy', show: function (r) { return !r.ongoing; } },
   { k: 'ongoing', label: 'Đang thực hiện', t: 'check' },
+  { k: 'accepted', label: 'Đã nghiệm thu', t: 'check', show: function (r) { return !r.ongoing; } },
+  { k: 'rank', label: 'Xếp hạng nghiệm thu', t: 'select', opts: CV.RANKS, blank: CV.RANK_NONE, full: false, show: function (r) { return !r.ongoing && !!r.accepted; }, hint: 'Chỉ lưu để quản lý, không đưa vào file CV. Đề tài chưa nghiệm thu mặc định là “(không xếp hạng)”.' },
   { k: 'level', label: 'Cấp đề tài', t: 'select', opts: CV.LEVELS, req: 1, full: false },
   { k: 'role', label: 'Trách nhiệm tham gia', t: 'select', opts: CV.ROLES, req: 1, full: false },
   { k: 'code', label: 'Mã số (nội bộ)', full: false, hint: 'Chỉ dùng cho bộ lọc của quản trị nếu bạn chia sẻ; không xuất ra file mặc định.' },
@@ -189,10 +194,10 @@ var PRJ_FIELDS = [
 PAGES.projects = function (root) {
   var list = S.profile.projects.slice().sort(function (a, b) { return CV.num(b.startYear) - CV.num(a.startYear); });
   root.innerHTML = head('Đề tài tham gia', 'Mục IV.1 của mẫu: tên đề tài, năm bắt đầu/hoàn thành, cấp, trách nhiệm tham gia.', '<button class="btn primary" data-act="prj_add">+ Thêm đề tài</button>') + warnBox('projects') +
-    '<div class="card">' + (list.length ? '<div class="tscroll"><table class="t"><tr><th>Tên đề tài</th><th>Năm</th><th>Cấp</th><th>Trách nhiệm</th><th></th></tr>' + list.map(function (p) { return '<tr><td>' + esc(p.name) + (p.code ? '<br><span class="muted small">Mã số: ' + esc(p.code) + '</span>' : '') + '</td><td style="white-space:nowrap">' + esc(CV.fmtYears(p)) + '</td><td>' + esc(p.level) + '</td><td>' + esc(p.role) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('prj', p.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có đề tài nào. Thêm đề tài.</div>') + '</div>';
+    '<div class="card">' + (list.length ? '<div class="tscroll"><table class="t"><tr><th>Tên đề tài</th><th>Năm</th><th>Cấp</th><th>Trách nhiệm</th><th>Xếp hạng</th><th></th></tr>' + list.map(function (p) { return '<tr><td>' + esc(p.name) + (p.code ? '<br><span class="muted small">Mã số: ' + esc(p.code) + '</span>' : '') + '</td><td style="white-space:nowrap">' + esc(CV.fmtYears(p)) + '</td><td>' + esc(p.level) + '</td><td>' + esc(p.role) + '</td><td>' + rankCell(p) + '</td><td class="right" style="white-space:nowrap">' + actionBtns('prj', p.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Chưa có đề tài nào. Thêm đề tài.</div>') + '</div>';
 };
-ACT.prj_add = function () { openForm({ title: 'Thêm đề tài', rec: { id: uid() }, fields: PRJ_FIELDS, wide: true, onSave: function (r) { upsert('projects', r); } }); };
-ACT.prj_edit = function (id) { openForm({ title: 'Sửa đề tài', rec: findById(S.profile.projects, id), fields: PRJ_FIELDS, wide: true, onSave: function (r) { upsert('projects', r); } }); };
+ACT.prj_add = function () { openForm({ title: 'Thêm đề tài', rec: { id: uid() }, fields: PRJ_FIELDS, check: prjCheck, wide: true, onSave: function (r) { upsert('projects', r); } }); };
+ACT.prj_edit = function (id) { openForm({ title: 'Sửa đề tài', rec: findById(S.profile.projects, id), fields: PRJ_FIELDS, check: prjCheck, wide: true, onSave: function (r) { upsert('projects', r); } }); };
 ACT.prj_del = function (id) { delItem('projects', id, 'đề tài'); };
 
 /* ---------------------------------------------------------------- Công bố khoa học */
@@ -208,11 +213,13 @@ var PUB_FIELDS = [
   { k: 'publisher', label: 'Nhà xuất bản', show: function (r) { return r.type !== 'article'; }, req: 0 },
   { k: 'bookRole', label: 'Vai trò trong sách', t: 'select', opts: ['Chủ biên', 'Đồng chủ biên', 'Tham gia'], show: function (r) { return r.type === 'book'; } },
   { k: 'registrationNo', label: 'Số xác nhận đăng ký xuất bản', show: function (r) { return r.type === 'book'; } },
-  { k: 'issn', label: 'ISSN', full: false, show: function (r) { return r.type !== 'book'; } },
-  { k: 'isbn', label: 'ISBN', full: false, show: function (r) { return r.type !== 'article'; } },
-  { k: 'doi', label: 'DOI', full: false, show: function (r) { return r.type !== 'book'; } },
-  { k: 'indexClass', label: 'Phân loại chỉ mục', t: 'select', opts: [{ v: 'isi_scopus', l: 'ISI/Scopus' }, { v: 'intl_other', l: 'Quốc tế khác' }, { v: 'domestic', l: 'Trong nước' }], hint: 'Dùng cho bộ lọc quốc tế/trong nước của quản trị.' },
-  { k: 'keywords', label: 'Từ khoá', t: 'tags' }];
+  { k: 'issn', label: 'ISSN', v: 'issn', full: false, show: function (r) { return r.type !== 'book'; } },
+  { k: 'isbn', label: 'ISBN', v: 'isbn', full: false, show: function (r) { return r.type !== 'article'; } },
+  { k: 'doi', label: 'DOI', v: 'doi', full: false, ph: '10.xxxx/…', show: function (r) { return r.type !== 'book'; }, hint: 'Dán DOI hoặc đường dẫn doi.org; hệ thống tự phân loại chỉ mục.' },
+  { k: 'url', label: 'URL công trình (tuỳ chọn)', v: 'url', full: false, ph: 'https://…' },
+  { k: 'indexClass', label: 'Phân loại chỉ mục', t: 'select', opts: [{ v: 'isi_scopus', l: 'ISI/Scopus' }, { v: 'intl_other', l: 'Quốc tế khác' }, { v: 'domestic', l: 'Trong nước' }], hint: 'Dùng cho bộ lọc quốc tế/trong nước của quản trị. Khi nhập DOI, hệ thống tự gợi ý; bạn có thể sửa.' },
+  { k: 'keywords', label: 'Từ khoá', t: 'tags' },
+  { k: 'file', label: 'Tệp PDF toàn văn (bài báo, báo cáo hội thảo, giáo trình)', t: 'file' }];
 function guessMe(authors) {
   var me = CV.norm(S.profile.basic.fullName); if (!me) return authors;
   var parts = me.split(' '), rev = parts.length > 1 ? parts.slice(1).concat(parts[0]).join(' ') : me, found = false;
@@ -220,9 +227,26 @@ function guessMe(authors) {
   if (!found && authors.length === 0) authors.push({ name: S.profile.basic.fullName, me: true, main: false, corr: false });
   return authors;
 }
+var IDX_LABEL = { isi_scopus: 'ISI/Scopus', intl_other: 'Quốc tế khác', domestic: 'Trong nước' };
+function wirePubDoi(m) {
+  var doiEl = $('#mf_doi', m.root), sel = $('#mf_indexClass', m.root); if (!doiEl || !sel) return;
+  var note = document.createElement('div'); note.className = 'hint auto'; note.id = 'idxNote'; sel.closest('.f').appendChild(note);
+  var seq = 0;
+  doiEl.addEventListener('change', function () {
+    var d = /10\.\d{4,9}\/[^\s"<>]+/i.exec(doiEl.value); if (!d) return;
+    var doi = d[0].replace(/[.,;)\]]+$/, ''); if (doi !== doiEl.value) { doiEl.value = doi; doiEl.dispatchEvent(new Event('input', { bubbles: true })); }
+    var my = ++seq; note.textContent = 'Đang tra DOI để phân loại chỉ mục…';
+    rpc('apiLookupDoi', doi).then(function (r) {
+      if (my !== seq || !r.indexClass) { if (my === seq) note.textContent = 'Không tự phân loại được, hãy chọn thủ công.'; return; }
+      if (!sel.value || sel.getAttribute('data-auto')) { sel.value = r.indexClass; sel.setAttribute('data-auto', '1'); sel.dispatchEvent(new Event('change', { bubbles: true })); note.textContent = 'Tự phân loại: ' + IDX_LABEL[r.indexClass] + (r.indexNote ? ' — ' + r.indexNote : '') + ' Bạn có thể đổi.'; }
+      else note.textContent = 'Gợi ý theo DOI: ' + IDX_LABEL[r.indexClass] + (r.indexNote ? ' — ' + r.indexNote : '') + ' (bạn đã chọn "' + (IDX_LABEL[sel.value] || sel.value) + '").';
+    }).catch(function () { if (my === seq) note.textContent = 'Chưa tra được DOI để phân loại, hãy chọn thủ công.'; });
+  });
+  sel.addEventListener('change', function (e) { if (e.isTrusted) sel.removeAttribute('data-auto'); });
+}
 function openPubForm(rec, isNew) {
   rec = rec || { id: uid(), type: 'article', authors: [{ name: S.profile.basic.fullName || '', me: true, main: false, corr: false }], source: 'manual' };
-  openForm({ title: isNew === false ? 'Sửa công bố' : (rec.source && rec.source !== 'manual' ? 'Xác nhận thông tin công bố' : 'Thêm công bố'), rec: rec, fields: PUB_FIELDS, wide: true,
+  var pm = openForm({ title: isNew === false ? 'Sửa công bố' : (rec.source && rec.source !== 'manual' ? 'Xác nhận thông tin công bố' : 'Thêm công bố'), rec: rec, fields: PUB_FIELDS, wide: true,
     onSave: function (r, orig) {
       r.verified = !!(orig.verified && orig.doi && orig.doi === r.doi); if (!r.verified && r.source !== 'manual') r.source = 'manual';
       if (rec.source && rec.source !== 'manual' && isNew !== false) r.verified = true;
@@ -231,6 +255,7 @@ function openPubForm(rec, isNew) {
       if (dup) toast('Lưu ý: công bố này có thể đã được nhập trước đó.');
       upsert('pubs', r);
     } });
+  wirePubDoi(pm); return pm;
 }
 var pubFilter = { q: '', type: '' };
 PAGES.pubs = function (root) {
@@ -240,13 +265,17 @@ PAGES.pubs = function (root) {
   root.innerHTML = head('Công bố khoa học', 'Mục IV.2 của mẫu. <b>Nhập tay luôn dùng được</b>; tra DOI chỉ là hỗ trợ và luôn có bước bạn xác nhận.',
     '<div class="row"><button class="btn" data-act="pub_doi">Tự điền từ DOI/URL</button><button class="btn primary" data-act="pub_add">+ Thêm thủ công</button></div>') + warnBox('pubs') +
     '<div class="card"><div class="row" style="margin-bottom:10px"><input class="inp" style="max-width:280px" id="pubQ" placeholder="Tìm theo tên hoặc tạp chí" value="' + esc(pubFilter.q) + '"><select class="inp" style="max-width:190px" id="pubT"><option value="">Mọi loại</option>' + Object.keys(CV.PUB_TYPE).map(function (k) { return '<option value="' + k + '"' + (pubFilter.type === k ? ' selected' : '') + '>' + CV.PUB_TYPE[k] + '</option>'; }).join('') + '</select><span class="spacer"></span><span class="muted small">' + all.length + ' công bố · ' + ver + ' đã xác minh DOI · ' + (all.length - ver) + ' tự khai</span></div>' +
-    (list.length ? '<div class="tscroll"><table class="t"><tr><th>Tên công trình</th><th>Năm</th><th>Nơi công bố</th><th>Phân loại</th><th></th></tr>' + list.map(function (p) { return '<tr><td>' + esc(p.title) + '<br><span class="muted small">' + esc((p.authors || []).map(function (a) { return a.name; }).slice(0, 4).join(', ')) + ((p.authors || []).length > 4 ? ' …' : '') + '</span></td><td>' + esc(p.year) + '</td><td>' + esc(p.venue || p.publisher) + '<br><span class="tag">' + esc(CV.PUB_TYPE[p.type]) + '</span></td><td>' + (p.indexClass ? '<span class="tag">' + CV.INDEX_CLASS[p.indexClass] + '</span>' : '') + (p.verified ? '<span class="tag ok">Đã xác minh</span>' : '<span class="tag warn">Tự khai</span>') + '</td><td class="right" style="white-space:nowrap">' + actionBtns('pub', p.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">' + (all.length ? 'Không có công bố khớp bộ lọc.' : 'Chưa có công bố nào. Thêm thủ công hoặc tự điền từ DOI.') + '</div>') + '</div>';
+    (list.length ? '<div class="tscroll"><table class="t"><tr><th>Tên công trình</th><th>Năm</th><th>Nơi công bố</th><th>Phân loại</th><th></th></tr>' + list.map(function (p) { return '<tr><td>' + esc(p.title) + '<br><span class="muted small">' + esc((p.authors || []).map(function (a) { return a.name; }).slice(0, 4).join(', ')) + ((p.authors || []).length > 4 ? ' …' : '') + '</span></td><td>' + esc(p.year) + '</td><td>' + esc(p.venue || p.publisher) + '<br><span class="tag">' + esc(CV.PUB_TYPE[p.type]) + '</span></td><td>' + (p.indexClass ? '<span class="tag">' + CV.INDEX_CLASS[p.indexClass] + '</span>' : '') + (p.verified ? '<span class="tag ok">Đã xác minh</span>' : '<span class="tag warn">Tự khai</span>') + (p.file && p.file.id ? '<br><button class="btn link small" data-act="pub_pdf" data-id="' + p.id + '">Tệp PDF</button>' : '') + '</td><td class="right" style="white-space:nowrap">' + actionBtns('pub', p.id) + '</td></tr>'; }).join('') + '</table></div>' : '<div class="empty">' + (all.length ? 'Không có công bố khớp bộ lọc.' : 'Chưa có công bố nào. Thêm thủ công hoặc tự điền từ DOI.') + '</div>') + '</div>';
   $('#pubQ').oninput = function () { pubFilter.q = this.value; clearTimeout(PAGES.pubs.t); var el = this; PAGES.pubs.t = setTimeout(function () { render(); var n = $('#pubQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
   $('#pubT').onchange = function () { pubFilter.type = this.value; render(); };
 };
 ACT.pub_add = function () { openPubForm(); };
 ACT.pub_edit = function (id) { openPubForm(findById(S.profile.pubs, id), false); };
 ACT.pub_del = function (id) { delItem('pubs', id, 'công bố'); };
+ACT.pub_pdf = function (id, b) {
+  var p = findById(S.profile.pubs, id); if (!p || !p.file) return; if (b) b.disabled = true;
+  rpc('apiGetPubFile', p.file.id).then(function (r) { downloadB64(r.base64, r.fileName, 'application/pdf'); }).catch(function (e) { toast(e.message, true); }).then(function () { if (b) b.disabled = false; });
+};
 ACT.pub_doi = function () {
   var m = openModal('<header><h2>Tự điền từ DOI hoặc URL</h2><button class="x" data-close>×</button></header><div class="body"><p class="muted">Dán DOI (10.xxxx/…) hoặc URL chứa DOI. Hệ thống tra Crossref (dự phòng OpenAlex). Kết quả chỉ là bản xem trước để bạn xác nhận và bổ sung.</p><div class="f"><label for="doiIn">DOI / URL</label><input id="doiIn" type="text" placeholder="https://doi.org/10.1000/xyz123"><div class="err"></div></div><div id="doiRes"></div></div><footer><button class="btn" data-close>Đóng</button><button class="btn primary" id="doiGo">Tra cứu</button></footer>', { onEnter: go });
   var cand = null;
@@ -256,7 +285,7 @@ ACT.pub_doi = function () {
     b.disabled = true; b.textContent = 'Đang tra cứu…'; $('.err', m.root).textContent = '';
     rpc('apiLookupDoi', v).then(function (r) {
       cand = r; b.disabled = false; b.textContent = 'Dùng kết quả';
-      $('#doiRes', m.root).innerHTML = '<div class="cand"><b>' + esc(r.title) + '</b><div class="small muted">' + esc((r.authors || []).slice(0, 8).map(function (a) { return a.name; }).join(', ')) + ((r.authors || []).length > 8 ? ' …' : '') + '</div><div class="small">' + esc(r.venue) + (r.year ? ' · ' + esc(r.year) : '') + (r.volume ? ' · tập ' + esc(r.volume) : '') + (r.pages ? ' · tr. ' + esc(r.pages) : '') + '</div><div class="small muted">Nguồn: ' + (r.source === 'crossref' ? 'Crossref' : 'OpenAlex') + '. Thứ tự họ tên người Việt đã được chuẩn hoá tự động, hãy kiểm tra lại.</div></div>';
+      $('#doiRes', m.root).innerHTML = '<div class="cand"><b>' + esc(r.title) + '</b><div class="small muted">' + esc((r.authors || []).slice(0, 8).map(function (a) { return a.name; }).join(', ')) + ((r.authors || []).length > 8 ? ' …' : '') + '</div><div class="small">' + esc(r.venue) + (r.year ? ' · ' + esc(r.year) : '') + (r.volume ? ' · tập ' + esc(r.volume) : '') + (r.pages ? ' · tr. ' + esc(r.pages) : '') + '</div><div class="small muted">' + (r.indexClass ? 'Phân loại chỉ mục tự động: <b>' + IDX_LABEL[r.indexClass] + '</b>' + (r.indexNote ? ' (' + esc(r.indexNote) + ')' : '') + '. ' : '') + 'Nguồn: ' + (r.source === 'crossref' ? 'Crossref' : 'OpenAlex') + '. Thứ tự họ tên người Việt đã được chuẩn hoá tự động, hãy kiểm tra lại.</div></div>';
     }).catch(function (e) { b.disabled = false; b.textContent = 'Tra cứu'; $('.err', m.root).textContent = e.message; });
   }
   $('#doiGo', m.root).onclick = go; $('#doiIn', m.root).addEventListener('input', function () { cand = null; $('#doiGo', m.root).textContent = 'Tra cứu'; $('#doiRes', m.root).innerHTML = ''; });
@@ -318,7 +347,7 @@ PAGES.export = function (root) {
       cfgChk('keepEmptyLines', 'Giữ các dòng trống theo mẫu khi chưa có dữ liệu') + cfgChk('signerName', 'In họ tên dưới “Người khai ký tên”') +
       '<div class="f"><label>Địa danh</label><input type="text" data-cfgtxt="place" value="' + esc(c.place) + '" placeholder="Để trống nếu ký tay"></div><div class="f"><label>Ngày tháng</label><input type="text" data-cfgtxt="date" value="' + esc(c.date) + '" placeholder="vd: 10 tháng 10 năm 2026 (để trống nếu ký tay)"></div><p class="muted small">Phần “Xác nhận của cơ quan” và “Người khai ký tên” luôn để trống để ký.</p></details>') +
     '<div class="f" style="margin-top:10px"><label>Tên bản xuất (lưu vào lịch sử)</label><input type="text" id="expName" value="' + esc(S.exportName || '') + '" placeholder="vd: Hồ sơ xét PGS 2026"></div>' +
-    '<div class="row" style="margin-top:10px"><button class="btn primary" id="btnDocx" data-act="exp_docx">Xuất Word (.docx)</button><button class="btn" id="btnPdf" data-act="exp_pdf">Xuất PDF</button></div></div>' +
+    '<div class="row" style="margin-top:10px"><button class="btn primary" id="btnDocx" data-act="exp_docx">Xuất Word (.docx)</button><button class="btn" id="btnPdf" data-act="exp_pdf">Xuất PDF</button><button class="btn" id="btnPrint" data-act="exp_print" title="In trực tiếp bản xem trước (khổ A4, lề như file Word)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg>In</button></div></div>' +
     '<div class="pv-wrap" id="pvWrap"><div class="pv-bar"><button class="btn" data-act="pv_zoom" data-id="-0.1">Zoom −</button><button class="btn" data-act="pv_zoom" data-id="0.1">Zoom +</button><button class="btn" data-act="pv_fit">Vừa màn hình</button><button class="btn" data-act="pv_full">Toàn màn hình</button><span class="pv-note">Bản xem trước gần đúng, file Word là bản chính thức</span></div><div class="pv-scroll" id="pvScroll"><div class="page" id="pvPage"></div></div></div></div>';
   renderPreview(); setTimeout(ACT.pv_fit, 0);
 };
@@ -351,6 +380,26 @@ function doExport(fmt) {
   }).catch(function (e) { done(); toast(e.message, true); });
 }
 ACT.exp_docx = function () { doExport('docx'); }; ACT.exp_pdf = function () { doExport('pdf'); };
+
+/* In: dựng trang A4 riêng (lề 3 cm trái, 2 cm còn lại như file Word) trong khung ẩn rồi gọi hộp thoại in của trình duyệt. In đúng dữ liệu đang xem trước, không cần lưu. */
+var PRINT_CSS = '@page{size:A4;margin:20mm 20mm 20mm 30mm}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#000}body{font-family:"Times New Roman",Times,serif;font-size:12pt;line-height:1.3}' +
+  'p{margin:0}table{border-collapse:collapse;width:100%;margin:2px 0 6px;font-size:11.5pt}table.cvt{table-layout:fixed}table.cvt th,table.cvt td{border:1px solid #000;padding:3px 5px;vertical-align:top;text-align:left;word-wrap:break-word}table.cvt th{text-align:center;font-weight:700}' +
+  'table.cvt tr,table.sign tr{page-break-inside:avoid}table.cvt thead{display:table-header-group}table.sign{border:0;margin-top:14px;page-break-inside:avoid}table.sign td{border:0;text-align:center;width:50%}' +
+  '.rw{display:flex;flex-wrap:wrap;margin-bottom:2px}.rw .it{display:flex;align-items:baseline;min-width:0}.rw .tx{flex:0 1 auto}.rw .gap{flex:0 0 8px}.rw .dots{flex:1 1 12px;min-width:12px;border-bottom:1.5px dotted #000;margin:0 3px;position:relative;top:-3px;height:0}';
+function buildPrintHtml() {
+  S.profile.account = { email: S.user.email };
+  return '<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>' + esc((S.profile.basic.fullName || 'Ly lich khoa hoc') + ' - Ly lich khoa hoc') + '</title><style>' + PRINT_CSS + '</style></head><body>' + modelToHtml(CV.buildModel(S.profile, S.exportCfg)) + '</body></html>';
+}
+ACT.exp_print = function () {
+  var html = buildPrintHtml(), old = $('#printFrame'); if (old) old.remove();
+  var fr = document.createElement('iframe'); fr.id = 'printFrame'; fr.setAttribute('aria-hidden', 'true'); fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  fr.onload = function () {
+    fr.onload = null;
+    try { fr.contentWindow.focus(); fr.contentWindow.print(); }
+    catch (e) { var w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 300); } else toast('Trình duyệt chặn cửa sổ in. Hãy xuất PDF rồi in.', true); }
+  };
+  document.body.appendChild(fr); fr.srcdoc = html;
+};
 
 /* ---------------------------------------------------------------- Lịch sử xuất */
 PAGES.history = function (root) {

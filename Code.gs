@@ -19,6 +19,7 @@ var SHEET_DEFS = {
   EmailVerify: ['email', 'contact', 'code', 'token', 'createdAt', 'used']
 };
 var PROFILE_CHUNK_COL = 7, EXPORT_CHUNK_COL = 9, CHUNK_SIZE = 45000;
+var MAX_FILES_PER_USER = 100, MAX_PDF_BYTES = 10 * 1024 * 1024, OTP_TTL_S = 600, OTP_MAX_TRIES = 5;
 var LIMITS = { degrees: 20, titles: 6, languages: 10, work: 80, projects: 300, pubs: 1500, awards: 300, courses: 60, directions: 60, authors: 80 };
 
 /* ===================== WEB APP ===================== */
@@ -284,8 +285,8 @@ function oauthCfg_() {
 function apiAuthInfo() {
   return run_(function () {
     var email = sessionEmail_(), cfg = oauthCfg_();
-    if (email) return { mode: 'session', email: email };
-    return { mode: (cfg.gate || (cfg.id && cfg.secret)) ? 'oauth' : 'unconfigured' };
+    if (email) return { mode: 'session', email: email, otp: true };
+    return { mode: (cfg.gate || (cfg.id && cfg.secret)) ? 'oauth' : 'unconfigured', otp: true };
   });
 }
 /** Cách B: tên miền đã xác thực tài khoản Google; chỉ cần chọn vai trò. */
@@ -350,6 +351,42 @@ function ticketLogin_(tk) {
     return finishLogin_(String(o.e).toLowerCase(), o.r, 'gate');
   } catch (err) { console.error(err); return { error: 'Không hoàn tất được đăng nhập: ' + ((err && err.message) || err) }; }
 }
+/* ===================== ĐĂNG NHẬP BẰNG MÃ GỬI QUA EMAIL =====================
+ * Dùng khi trình duyệt đang đăng nhập Google khác tài khoản muốn vào (vd. máy của người khác). Người dùng nhập email A,
+ * hệ thống gửi mã 6 số tới A; nhập đúng mã thì chứng minh đang kiểm soát hộp thư A và được vào bằng tài khoản A (không cần mật khẩu).
+ * Mã chỉ lưu dạng băm (HMAC) trong CacheService 10 phút, dùng 1 lần, tối đa 5 lần thử sai. */
+function otpHash_(email, code) { return b64u_(Utilities.computeHmacSha256Signature('otp:' + email + ':' + code, encKey_())); }
+function apiOtpSend(email, role) {
+  return run_(function () {
+    email = String(email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) throw userError_('Email chưa đúng định dạng, ví dụ ten@truong.edu.vn.');
+    var cache = CacheService.getScriptCache(), qk = 'otpq:' + email, n = Number(cache.get(qk) || 0);
+    if (n >= 3) throw userError_('Bạn đã yêu cầu mã quá nhiều lần. Hãy đợi khoảng 15 phút rồi thử lại.');
+    var reply = { sent: true, ttl: OTP_TTL_S, email: email };      // luôn trả lời giống nhau để không lộ tài khoản nào tồn tại
+    if (isBlocked_(email)) { audit_(email, 'login.otp.blocked', '', ''); return reply; }
+    if (MailApp.getRemainingDailyQuota() < 5) throw userError_('Hệ thống đã hết hạn mức gửi thư trong ngày. Hãy dùng đăng nhập Google hoặc thử lại vào ngày mai.');
+    cache.put(qk, String(n + 1), 900);
+    var raw = Utilities.getUuid().replace(/-/g, ''), code = ('000000' + (parseInt(raw.slice(0, 8), 16) % 1000000)).slice(-6);
+    cache.put('otp:' + email, JSON.stringify({ h: otpHash_(email, code), t: 0 }), OTP_TTL_S);
+    MailApp.sendEmail({ to: email, subject: '[' + APP_NAME + '] Mã đăng nhập: ' + code, name: APP_NAME,
+      htmlBody: '<p>Mã đăng nhập của bạn: <b style="font-size:22px;letter-spacing:3px">' + code + '</b></p><p>Mã có hiệu lực ' + Math.round(OTP_TTL_S / 60) + ' phút và chỉ dùng được một lần. Nếu bạn không yêu cầu, hãy bỏ qua thư này và không chia sẻ mã cho ai.</p>' });
+    audit_(email, 'login.otp.send', role === 'admin' ? 'admin' : 'user', '');
+    return reply;
+  });
+}
+function apiOtpVerify(email, code, role) {
+  return run_(function () {
+    email = String(email || '').trim().toLowerCase(); code = String(code || '').replace(/\s/g, '');
+    if (!/^\d{6}$/.test(code)) throw userError_('Mã gồm 6 chữ số.');
+    var cache = CacheService.getScriptCache(), k = 'otp:' + email, o = safeJson_(cache.get(k), null);
+    if (!o) throw userError_('Mã không đúng hoặc đã hết hạn. Hãy bấm gửi lại mã.');
+    if (o.t >= OTP_MAX_TRIES) { cache.remove(k); throw userError_('Nhập sai quá nhiều lần. Hãy yêu cầu mã mới.'); }
+    if (otpHash_(email, code) !== o.h) { o.t++; cache.put(k, JSON.stringify(o), OTP_TTL_S); throw userError_('Mã không đúng. Còn ' + (OTP_MAX_TRIES - o.t) + ' lần thử.'); }
+    cache.remove(k);
+    var r = finishLogin_(email, role, 'otp'); if (r.error) throw userError_(r.error, 'BLOCKED');
+    return r;
+  });
+}
 function apiSwitchRole(role) {
   return run_(function () {
     var id = identity_(); role = role === 'admin' ? 'admin' : 'user';
@@ -401,6 +438,8 @@ function cleanProfile_(raw, prev) {
   ['fullName', 'gender', 'dob', 'pob', 'hometown', 'ethnicity', 'position', 'workplace', 'address', 'phoneCQ', 'phoneNR', 'phoneDD', 'fax', 'contactEmail'].forEach(function (k) { o.basic[k] = str_(b[k], k === 'address' ? 300 : 200); });
   o.basic.hvDegree = str_(b.hvDegree, 60); o.basic.hvCountry = str_(b.hvCountry, 80); o.basic.hvTitle = str_(b.hvTitle, 60); o.basic.hvYear = yr_(b.hvYear); o.basic.hvTitleYear = yr_(b.hvTitleYear);
   o.basic.contactEmailVerified = !!(prev && prev.basic && prev.basic.contactEmail === o.basic.contactEmail && prev.basic.contactEmailVerified);
+  var geo = geoData_();
+  ['pob', 'hometown', 'address'].forEach(function (k) { var r = CV.chk.addr(o.basic[k], geo); if (r.ok) o.basic[k] = r.canonical; });
   var d = raw.idDoc || {};
   o.idDoc.type = ['CMND', 'CCCD', 'The can cuoc'].indexOf(d.type) >= 0 ? d.type : 'CCCD';
   o.idDoc.issueDate = str_(d.issueDate, 20); o.idDoc.issuePlace = str_(d.issuePlace, 200);
@@ -415,7 +454,8 @@ function cleanProfile_(raw, prev) {
   o.work = arr_(raw.work, LIMITS.work).map(function (x) { return { id: id_(x.id), from: str_(x.from, 10), to: str_(x.to, 10), current: !!x.current, org: str_(x.org, 300), position: str_(x.position, 200), duties: str_(x.duties, 1000) }; });
   o.projects = arr_(raw.projects, LIMITS.projects).map(function (x) {
     return { id: id_(x.id), name: str_(x.name, 600), startYear: yr_(x.startYear), endYear: yr_(x.endYear), ongoing: !!x.ongoing,
-      level: CV.LEVELS.indexOf(x.level) >= 0 ? x.level : '', role: CV.ROLES.indexOf(x.role) >= 0 ? x.role : '', code: str_(x.code, 80), result: str_(x.result, 200), funding: str_(x.funding, 80) };
+      level: CV.LEVELS.indexOf(x.level) >= 0 ? x.level : '', role: CV.ROLES.indexOf(x.role) >= 0 ? x.role : '', code: str_(x.code, 80), result: str_(x.result, 200), funding: str_(x.funding, 80),
+      accepted: !!x.accepted && !x.ongoing, rank: (!!x.accepted && !x.ongoing && CV.RANKS.indexOf(x.rank) >= 0) ? x.rank : '' };
   });
   o.pubs = arr_(raw.pubs, LIMITS.pubs).map(function (x) {
     return { id: id_(x.id), type: ['article', 'conference', 'book'].indexOf(x.type) >= 0 ? x.type : 'article', title: str_(x.title, 800),
@@ -423,7 +463,9 @@ function cleanProfile_(raw, prev) {
       venue: str_(x.venue, 400), volume: str_(x.volume, 40), issue: str_(x.issue, 40), pages: str_(x.pages, 40), year: yr_(x.year), doi: str_(x.doi, 200), issn: str_(x.issn, 30), isbn: str_(x.isbn, 40),
       publisher: str_(x.publisher, 200), bookRole: str_(x.bookRole, 80), registrationNo: str_(x.registrationNo, 80),
       indexClass: CV.INDEX_CLASS[x.indexClass] ? x.indexClass : '', keywords: arr_(x.keywords, 20).map(function (k) { return str_(k, 60); }).filter(String),
-      verified: !!x.verified, source: ['manual', 'crossref', 'openalex'].indexOf(x.source) >= 0 ? x.source : 'manual' };
+      verified: !!x.verified, source: ['manual', 'crossref', 'openalex'].indexOf(x.source) >= 0 ? x.source : 'manual',
+      url: /^https?:\/\/\S+$/i.test(str_(x.url, 500)) ? str_(x.url, 500) : '',
+      file: (x.file && /^[\w-]{10,80}$/.test(String(x.file.id || ''))) ? { id: String(x.file.id), name: str_(x.file.name, 150), size: Math.max(0, Number(x.file.size) || 0) } : null };
   });
   o.awards = arr_(raw.awards, LIMITS.awards).map(function (x) { return { id: id_(x.id), kind: CV.AWARD_KIND[x.kind] ? x.kind : 'giai_thuong', name: str_(x.name, 400), issuer: str_(x.issuer, 250), year: yr_(x.year), content: str_(x.content, 800) }; });
   var ex = raw.extra || {}, asp = ex.aspirations || {};
@@ -459,11 +501,15 @@ function apiSaveProfile(profile, baseUpdatedAt) {
       if (rec && baseUpdatedAt && String(rec.updatedAt) !== String(baseUpdatedAt)) {
         return { conflict: true, updatedAt: rec.updatedAt, profile: decryptProfile_(rec.profile) };
       }
+      var errs = CVm_().formatErrors(profile || {}, geoData_(), new Date());
+      if (errs.length) throw userError_('Hồ sơ có ' + errs.length + ' dữ liệu chưa đúng định dạng nên chưa được lưu:\n' + errs.slice(0, 8).map(function (e) { return '• ' + e.label + ': ' + e.msg; }).join('\n') + (errs.length > 8 ? '\n…' : ''), 'INVALID');
       var clean = cleanProfile_(profile, rec && rec.profile), ts = nowIso_();
+      var fileLeft = syncPubFiles_(c.email, clean);
       var chunks = pack_(clean);
       var fixed = [c.email, c.org, rec ? rec.createdAt : ts, ts, JSON.stringify(rec ? rec.consent : {}), chunks.length];
       writeRowWithChunks_(sheet_('Profiles'), rec ? rec.row : 0, fixed, chunks);
       audit_(c.email, 'profile.save', c.email, '');
+      try { trashOrphanFiles_(c.email, clean); } catch (e) { console.error('trashOrphanFiles_: ' + e); }
       return { updatedAt: ts, profile: decryptProfile_(clean) };
     });
   });
@@ -508,6 +554,7 @@ function apiDeleteAccount(confirmEmail) {
       deleteRowsWhere_('Exports', 'email', c.email);
       deleteRowsWhere_('EmailVerify', 'email', c.email);
       deleteRowsWhere_('Invites', 'to', c.email);
+      try { var uf = userFolder_(c.email, false); if (uf) uf.setTrashed(true); } catch (e) { console.error('xoá thư mục tệp: ' + e); }
       var anon = 'deleted:' + Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, c.email)).slice(0, 10);
       var au = sheet_('Audit'), n = au.getLastRow();
       if (n >= 2) {
@@ -523,6 +570,72 @@ function apiDeleteAccount(confirmEmail) {
 function deleteRowsWhere_(name, key, email) {
   var rows = readAll_(name).filter(function (r) { return String(r[key]).toLowerCase() === email; }).map(function (r) { return r._row; }).sort(function (a, b) { return b - a; });
   var sh = sheet_(name); rows.forEach(function (r) { sh.deleteRow(r); });
+}
+
+/* ===================== DANH MỤC ĐỊA CHỈ (dùng chung Geo.html với trình duyệt) ===================== */
+var GEO_ = null;
+function geoData_() {
+  if (GEO_) return GEO_;
+  try { GEO_ = (new Function(HtmlService.createHtmlOutputFromFile('Geo').getContent().replace(/<\/?script>/g, '') + '\nreturn VN_GEO;'))(); }
+  catch (e) { console.error('geoData_: ' + e); GEO_ = []; }
+  return GEO_;
+}
+
+/* ===================== TỆP PDF CÔNG BỐ (lưu trong Drive của chủ hệ thống, chỉ chủ hồ sơ tải được) ===================== */
+function sha16_(t) { return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(t)).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('').slice(0, 16); }
+function userFolder_(email, create) {
+  var P = PropertiesService.getScriptProperties(), root = null, rid = P.getProperty('FILES_ROOT');
+  if (rid) { try { root = DriveApp.getFolderById(rid); if (root.isTrashed && root.isTrashed()) root = null; } catch (e) { root = null; } }
+  if (!root) { if (!create) return null; root = DriveApp.createFolder('LLKH_TepCongBo (không chia sẻ)'); P.setProperty('FILES_ROOT', root.getId()); }
+  var nm = 'u_' + sha16_(email), it = root.getFoldersByName(nm);
+  while (it.hasNext()) { var f = it.next(); if (!(f.isTrashed && f.isTrashed())) return f; }
+  return create ? root.createFolder(nm) : null;
+}
+function ownedFiles_(email) {
+  var out = {}, folder = userFolder_(email, false); if (!folder) return out;
+  var it = folder.getFiles(), tag = 'llkh:' + sha16_(email);
+  while (it.hasNext()) { var f = it.next(); if (f.getDescription() === tag && !(f.isTrashed && f.isTrashed())) out[f.getId()] = f; }
+  return out;
+}
+function apiUploadPubFile(fileName, b64) {
+  return run_(function () {
+    var c = ctx_(), name = str_(fileName, 150).replace(/[\\\/:*?"<>|]/g, '_');
+    if (!/\.pdf$/i.test(name)) throw userError_('Chỉ nhận tệp PDF (.pdf).');
+    b64 = String(b64 || ''); if (!b64 || b64.length > MAX_PDF_BYTES * 1.4) throw userError_('Tệp rỗng hoặc lớn hơn 10 MB.');
+    var cache = CacheService.getScriptCache(), qk = 'upf:' + c.email, n = Number(cache.get(qk) || 0);
+    if (n >= 20) throw userError_('Bạn đã tải lên quá nhiều tệp trong 1 giờ. Vui lòng thử lại sau.');
+    var bytes = Utilities.base64Decode(b64);
+    if (bytes.length > MAX_PDF_BYTES) throw userError_('Tệp lớn hơn 10 MB.');
+    if (!(bytes[0] === 37 && bytes[1] === 80 && bytes[2] === 68 && bytes[3] === 70)) throw userError_('Nội dung tệp không phải PDF hợp lệ.');
+    cache.put(qk, String(n + 1), 3600);
+    var folder = userFolder_(c.email, true);
+    if (Object.keys(ownedFiles_(c.email)).length >= MAX_FILES_PER_USER) throw userError_('Bạn đã đạt giới hạn ' + MAX_FILES_PER_USER + ' tệp. Hãy gỡ bớt tệp ở các công bố cũ rồi lưu hồ sơ.');
+    var f = folder.createFile(Utilities.newBlob(bytes, 'application/pdf', name));
+    f.setDescription('llkh:' + sha16_(c.email));
+    audit_(c.email, 'pubfile.upload', f.getId(), bytes.length + ' bytes');
+    return { id: f.getId(), name: name, size: bytes.length };
+  });
+}
+function apiGetPubFile(fileId) {
+  return run_(function () {
+    var c = ctx_(), f = null; fileId = String(fileId || '');
+    if (!/^[\w-]{10,80}$/.test(fileId)) throw userError_('Mã tệp không hợp lệ.');
+    try { f = DriveApp.getFileById(fileId); } catch (e) { throw userError_('Không tìm thấy tệp (có thể đã bị xoá).'); }
+    if (f.getDescription() !== 'llkh:' + sha16_(c.email) || (f.isTrashed && f.isTrashed())) throw userError_('Bạn không có quyền tải tệp này.', 'FORBIDDEN');
+    return { base64: Utilities.base64Encode(f.getBlob().getBytes()), fileName: f.getName() };
+  });
+}
+/** Trước khi lưu: tệp nào không thuộc người dùng (hoặc đã mất) thì gỡ khỏi công bố. */
+function syncPubFiles_(email, clean) {
+  if (!(clean.pubs || []).some(function (p) { return p.file; })) return;
+  var own = ownedFiles_(email);
+  clean.pubs.forEach(function (p) { if (p.file && !own[p.file.id]) p.file = null; else if (p.file) { p.file.name = own[p.file.id].getName(); } });
+}
+/** Sau khi lưu: tệp của người dùng không còn công bố nào dùng và đã tồn tại hơn 1 giờ thì bỏ vào thùng rác. */
+function trashOrphanFiles_(email, clean) {
+  var own = ownedFiles_(email), keep = {}, now = Date.now();
+  (clean.pubs || []).forEach(function (p) { if (p.file) keep[p.file.id] = 1; });
+  Object.keys(own).forEach(function (id) { if (!keep[id] && now - own[id].getDateCreated().getTime() > 3600000) own[id].setTrashed(true); });
 }
 
 /* ===================== TRA CỨU DOI (Crossref → OpenAlex) ===================== */
@@ -553,9 +666,28 @@ function apiLookupDoi(input) {
       } catch (e2) { console.warn('openalex', e2); }
     }
     if (!res) throw userError_('Không tra cứu được DOI "' + doi + '" từ Crossref/OpenAlex. Bạn có thể nhập tay.');
+    try { var ci = classifyIndex_(res, mail); res.indexClass = ci.indexClass; res.indexNote = ci.indexNote; } catch (e3) { console.warn('classifyIndex_', e3); res.indexClass = ''; res.indexNote = ''; }
     audit_(c.email, 'doi.lookup', doi, res.source);
     return res;
   });
+}
+/* Tự phân loại chỉ mục từ DOI: nguồn công bố của Việt Nam -> Trong nước; nguồn "lõi" (OpenAlex is_core, gần với ISI/Scopus) -> ISI/Scopus; DOI quốc tế còn lại -> Quốc tế khác.
+ * Không có cơ sở dữ liệu ISI/Scopus chính thức nên kết quả chỉ là GỢI Ý, người dùng luôn sửa được. */
+function classifyIndex_(r, mail) {
+  if (r.type === 'book') return { indexClass: '', indexNote: 'Sách/giáo trình không phân loại chỉ mục.' };
+  var src = null, issn = String(r.issn || '').trim();
+  if (/^\d{4}-\d{3}[\dXx]$/.test(issn)) {
+    try {
+      var x = UrlFetchApp.fetch('https://api.openalex.org/sources/issn:' + issn + '?mailto=' + encodeURIComponent(mail), { muteHttpExceptions: true });
+      if (x.getResponseCode() === 200) src = JSON.parse(x.getContentText());
+    } catch (e) { console.warn('openalex source', e); }
+  }
+  var vn = /vi[eệ]t ?nam/i.test(String(r.publisher || '') + ' ' + String(r.venue || ''));
+  if (src && String(src.country_code || '').toUpperCase() === 'VN') vn = true;
+  if (vn) return { indexClass: 'domestic', indexNote: 'nguồn công bố của Việt Nam.' };
+  if (src && src.is_core === true) return { indexClass: 'isi_scopus', indexNote: 'tạp chí thuộc nhóm nguồn lõi trong OpenAlex (gần với ISI/Scopus), hãy đối chiếu danh mục chính thức.' };
+  if (src || r.publisher || r.venue) return { indexClass: 'intl_other', indexNote: 'có DOI quốc tế, chưa xác nhận thuộc ISI/Scopus.' };
+  return { indexClass: '', indexNote: '' };
 }
 function fromCrossref_(m, doi) {
   var type = m.type === 'book' || m.type === 'monograph' || m.type === 'edited-book' ? 'book' : (m.type === 'proceedings-article' ? 'conference' : 'article');

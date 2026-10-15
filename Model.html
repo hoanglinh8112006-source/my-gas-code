@@ -73,6 +73,95 @@
   }
   CV.fmtYears = fmtYears;
 
+  /* ---------- Kiểm tra ĐỊNH DẠNG (bắt buộc đúng mới được lưu). Dùng chung cho trình duyệt và máy chủ ---------- */
+  CV.RANKS = ['Khá', 'Giỏi', 'Xuất sắc'];
+  CV.RANK_NONE = '(không xếp hạng)';
+  function lowN(x) { return s(x).normalize('NFC').replace(/\s+/g, ' ').toLowerCase(); }
+  function geoIdx(geo) {
+    if (geo._idx) return geo._idx;
+    var idx = {};
+    geo.forEach(function (g) { var w = {}; g[1].forEach(function (x) { w[lowN(x)] = x; }); idx[lowN(g[0])] = { name: g[0], wards: w }; });
+    Object.defineProperty(geo, '_idx', { value: idx, enumerable: false });
+    return idx;
+  }
+  CV.chk = {
+    phone: function (v) { v = s(v); return !v || /^\d{10}$/.test(v) ? '' : 'Số điện thoại phải gồm đúng 10 chữ số (không dấu cách, không ký tự khác).'; },
+    year: function (v, now) {
+      v = s(v); if (!v) return ''; if (!/^\d{4}$/.test(v)) return 'Nhập năm gồm 4 chữ số.';
+      var cy = (now || new Date()).getFullYear();
+      if (+v < 1900) return 'Năm không hợp lệ (từ 1900 trở đi).';
+      return +v > cy ? 'Năm phải nằm trong quá khứ (không được lớn hơn ' + cy + ').' : '';
+    },
+    monthYear: function (v, now) {
+      v = s(v); if (!v) return ''; var m = /^(0?[1-9]|1[0-2])\/(\d{4})$/.exec(v); if (!m) return 'Nhập theo dạng mm/yyyy.';
+      var n = now || new Date(); if (+m[2] < 1900) return 'Năm không hợp lệ (từ 1900 trở đi).';
+      return (+m[2] > n.getFullYear() || (+m[2] === n.getFullYear() && +m[1] > n.getMonth() + 1)) ? 'Thời điểm phải nằm trong quá khứ hoặc tháng hiện tại.' : '';
+    },
+    date: function (v, now) {
+      v = s(v); if (!v) return ''; var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v); if (!m) return 'Nhập theo dạng dd/mm/yyyy.';
+      var d = new Date(+m[3], m[2] - 1, +m[1]);
+      if (!(d.getFullYear() == m[3] && d.getMonth() == m[2] - 1 && d.getDate() == m[1] && +m[3] > 1900)) return 'Ngày không hợp lệ.';
+      return d > (now || new Date()) ? 'Ngày phải nằm trong quá khứ.' : '';
+    },
+    email: function (v) { v = s(v); return !v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? '' : 'Email không hợp lệ.'; },
+    idNumber: function (type, v) {
+      v = s(v); if (!v) return '';
+      if (type === 'CMND') return /^(\d{9}|\d{12})$/.test(v) ? '' : 'Số CMND gồm 9 chữ số (hoặc 12 chữ số với CMND mẫu mới).';
+      return /^\d{12}$/.test(v) ? '' : 'Số CCCD/thẻ căn cước gồm đúng 12 chữ số.';
+    },
+    doi: function (v) { v = s(v); return !v || /^10\.\d{4,9}\/\S+$/.test(v) ? '' : 'DOI phải có dạng 10.xxxx/… (không kèm khoảng trắng).'; },
+    issn: function (v) { v = s(v); return !v || /^\d{4}-\d{3}[\dXx]$/.test(v) ? '' : 'ISSN có dạng 1234-567X.'; },
+    isbn: function (v) { v = s(v).replace(/[\s-]/g, ''); return !v || /^(\d{9}[\dXx]|\d{13})$/.test(v) ? '' : 'ISBN gồm 10 hoặc 13 chữ số.'; },
+    url: function (v) { v = s(v); return !v || /^https?:\/\/[^\s]+\.[^\s]+$/i.test(v) ? '' : 'Đường dẫn phải bắt đầu bằng http:// hoặc https://.'; },
+    orcid: function (v) { v = s(v); return !v || /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(v) ? '' : 'ORCID có dạng 0000-0002-1825-0097.'; },
+    /* Địa chỉ: [chi tiết,] phường/xã, tỉnh/thành phố; phường/xã và tỉnh/thành phố PHẢI có trong danh sách và khớp nhau. */
+    addr: function (v, geo) {
+      v = s(v); var res = { ok: true, msg: '', canonical: v };
+      if (!v) return res;
+      if (!geo || !geo.length) return res;     // chưa nạp được danh mục thì không chặn
+      var segs = v.split(',').map(function (x) { return s(x); });
+      var bad = function (m) { res.ok = false; res.msg = m; return res; };
+      if (segs.some(function (x) { return !x; })) return bad('Địa chỉ có dấu phẩy thừa hoặc đoạn trống.');
+      if (segs.length < 2) return bad('Nhập theo dạng: [số nhà, đường,] phường/xã, tỉnh/thành phố. Hãy chọn phường/xã và tỉnh/thành phố từ gợi ý.');
+      var idx = geoIdx(geo), prov = idx[lowN(segs[segs.length - 1])];
+      if (!prov) return bad('Tỉnh/thành phố "' + segs[segs.length - 1] + '" không có trong danh sách. Hãy chọn từ gợi ý.');
+      var ward = prov.wards[lowN(segs[segs.length - 2])];
+      if (!ward) return bad('Phường/xã "' + segs[segs.length - 2] + '" không thuộc ' + prov.name + ' hoặc không có trong danh sách. Hãy chọn từ gợi ý.');
+      res.canonical = segs.slice(0, -2).concat([ward, prov.name]).join(', ');
+      return res;
+    }
+  };
+  /* Trả về danh sách lỗi định dạng [{route, label, msg}]; rỗng = hợp lệ. */
+  CV.formatErrors = function (P, geo, now) {
+    var out = [], B = P.basic || {}, C = CV.chk;
+    function add(route, label, msg) { if (msg) out.push({ route: route, label: label, msg: msg }); }
+    [['phoneCQ', 'Điện thoại cơ quan'], ['phoneNR', 'Điện thoại nhà riêng'], ['phoneDD', 'Điện thoại di động']].forEach(function (p) { add('basic', p[1], C.phone(B[p[0]])); });
+    add('basic', 'Ngày sinh', C.date(B.dob, now));
+    [['pob', 'Nơi sinh'], ['hometown', 'Quê quán'], ['address', 'Địa chỉ liên lạc']].forEach(function (p) { add('basic', p[1], C.addr(B[p[0]], geo).msg); });
+    add('basic', 'Năm nhận học vị', C.year(B.hvYear, now)); add('basic', 'Năm bổ nhiệm chức danh', C.year(B.hvTitleYear, now));
+    add('basic', 'E-mail liên hệ', C.email(B.contactEmail));
+    var I = P.idDoc || {}; add('basic', 'Số giấy tờ', C.idNumber(I.type, I.number)); add('basic', 'Ngày cấp giấy tờ', C.date(I.issueDate, now));
+    (P.degrees || []).forEach(function (d) { add('training', 'Học vị ' + s(d.degree) + (s(d.major) ? ' – ' + s(d.major) : ''), C.year(d.year, now)); });
+    (P.titles || []).forEach(function (t) { add('training', 'Học hàm ' + s(t.title), C.year(t.year, now)); });
+    (P.work || []).forEach(function (w) {
+      var lb = 'Công tác tại ' + (s(w.org) || '…');
+      add('work', lb + ' (từ)', C.monthYear(w.from, now)); if (!w.current) add('work', lb + ' (đến)', C.monthYear(w.to, now));
+      var a = monthIdx(w.from), b = monthIdx(w.to); if (!w.current && a != null && b != null && b < a) add('work', lb, 'Thời điểm kết thúc trước thời điểm bắt đầu.');
+    });
+    (P.projects || []).forEach(function (p) {
+      var lb = 'Đề tài "' + (s(p.name).slice(0, 40) || '…') + '"';
+      add('projects', lb + ' (năm bắt đầu)', C.year(p.startYear, now)); if (!p.ongoing) add('projects', lb + ' (năm hoàn thành)', C.year(p.endYear, now));
+      if (!p.ongoing && num(p.startYear) && num(p.endYear) && num(p.endYear) < num(p.startYear)) add('projects', lb, 'Năm hoàn thành trước năm bắt đầu.');
+    });
+    (P.pubs || []).forEach(function (p) {
+      var lb = 'Công bố "' + (s(p.title).slice(0, 40) || '…') + '"';
+      add('pubs', lb + ' (năm)', C.year(p.year, now)); add('pubs', lb + ' (DOI)', C.doi(p.doi)); add('pubs', lb + ' (ISSN)', C.issn(p.issn)); add('pubs', lb + ' (ISBN)', C.isbn(p.isbn)); add('pubs', lb + ' (URL)', C.url(p.url));
+    });
+    (P.awards || []).forEach(function (a) { add('awards', 'Giải thưởng/sáng chế "' + (s(a.name).slice(0, 40) || '…') + '"', C.year(a.year, now)); });
+    var X = P.extra || {}; add('extra', 'ORCID', C.orcid(X.orcid));
+    return out;
+  };
+
   /* ---------- Kiểm tra hợp lệ (chỉ cảnh báo, không chặn) ---------- */
   CV.validate = function (P) {
     var w = []; // {sec, msg}

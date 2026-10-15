@@ -62,10 +62,16 @@
 .l-hint{min-height:20px;margin:8px 20px 0;font-size:13.5px;color:#4b5b75}
 .l-input[readonly]{background:#f3f7fc}
 @media(max-width:899px){.login h1{font-size:clamp(2.6rem,13vw,4rem)}}
+.l-link{display:inline-block;margin:6px 20px 0;padding:6px 0;border:0;background:none;font:inherit;font-size:14px;color:var(--blue);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.l-link:hover{color:var(--navy)}
+.l-link:disabled{opacity:.6;cursor:progress}
+.l-otp{margin-top:6px}
+.l-otp .l-input{letter-spacing:.35em;text-align:center;font-weight:600}
+.l-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
 </style>
 <script>
 /* ===== Đăng nhập theo bản thiết kế: vai trò + email (gợi ý tài khoản Google) + nút Google; các viên pill rơi bằng matter-js ===== */
-var L = { role: 'user', info: null, busy: false, err: '', note: '', dispose: null };
+var L = { role: 'user', info: null, busy: false, err: '', note: '', dispose: null, otp: false, otpSent: false };
 function lsGet(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
 function lsSet(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) { } }
 var LROLES = [['user', 'Nhà khoa học'], ['admin', 'Quản trị đơn vị']];
@@ -84,7 +90,10 @@ function loginTemplate() {
     '<input class="l-input" id="login-email" type="email" placeholder="Nhập Email của bạn" autocomplete="email" aria-label="Email" aria-describedby="lgMsg">' +
     '<p class="l-error" id="lgMsg" role="alert"></p>' +
     '<button class="l-btn" id="lgGo" type="submit" disabled><span id="lgGoTx">Đăng nhập</span>' + G_LOGO + '</button>' +
-    '<p class="l-hint" id="lgHint" aria-live="polite"></p></form></div>' +
+    '<div class="l-otp" id="lgOtp" hidden><input class="l-input" id="login-code" type="text" inputmode="numeric" maxlength="6" placeholder="Mã 6 chữ số" autocomplete="one-time-code" aria-label="Mã xác thực gồm 6 chữ số">' +
+    '<div class="l-row"><button class="l-btn" id="lgOtpGo" type="button"><span id="lgOtpTx">Xác nhận mã</span></button><button class="l-link" id="lgOtpResend" type="button">Gửi lại mã</button></div></div>' +
+    '<p class="l-hint" id="lgHint" aria-live="polite"></p>' +
+    '<button class="l-link" id="lgOtpOpen" type="button">Đăng nhập tài khoản khác bằng mã gửi qua email</button><button class="l-link" id="lgOtpBack" type="button" hidden>Quay lại đăng nhập Google</button></form></div>' +
     '<div class="login-stage" id="login-stage"><svg class="blob" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M0 0C-20 33 40 67 0 100L100 100L100 0Z"/></svg>' +
     '<svg class="blob blob-w" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M-100 0L0 0C-20 33 40 67 0 100L-100 100Z"/></svg>' +
     '<svg class="squiggle" viewBox="0 0 130 70" fill="none" stroke="#4aa3f0" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 6C30-6 56 24 36 38C20 48 8 32 25 28C42 24 70 54 124 34"/><ellipse cx="62" cy="40" rx="9" ry="6" transform="rotate(-20 62 40)"/></svg>' +
@@ -125,7 +134,7 @@ function mountPills(stage) {
 
 function hideLogin() { if (L.dispose) { L.dispose(); L.dispose = null; } var el = $('#login'); if (el) { el.hidden = true; el.innerHTML = ''; } }
 function showLogin(err, note) {
-  hideLogin(); L.err = err || ''; L.note = note || ''; L.busy = false; L.info = null;
+  hideLogin(); L.err = err || ''; L.note = note || ''; L.busy = false; L.info = null; L.otp = false; L.otpSent = false;
   var b = $('#boot'); if (b) b.remove();
   $('#app').hidden = true; $('#app').innerHTML = '';
   var root = $('#login'); root.hidden = false; root.innerHTML = loginTemplate();
@@ -139,7 +148,12 @@ function showLogin(err, note) {
   L.dispose = function () { clearTimeout(rt); removeEventListener('resize', onResize); disposePills(); };
   $$('.l-role', root).forEach(function (n) { n.addEventListener('click', function () { L.role = n.dataset.role; lsSet('llkh_role', L.role); paintLogin(); }); });
   $('#login-email').addEventListener('input', function () { this.removeAttribute('aria-invalid'); L.err = ''; paintLogin(); });
-  $('#login-form').addEventListener('submit', function (e) { e.preventDefault(); loginGo(); });
+  $('#login-form').addEventListener('submit', function (e) { e.preventDefault(); if (L.otp) { if (L.otpSent) otpVerify(); else otpSend(); } else loginGo(); });
+  $('#lgOtpOpen').addEventListener('click', function () { L.otp = true; L.otpSent = false; L.err = ''; L.note = ''; var em = $('#login-email'); em.readOnly = false; paintLogin(); em.focus(); });
+  $('#lgOtpBack').addEventListener('click', function () { L.otp = false; L.otpSent = false; L.err = ''; L.note = ''; var em = $('#login-email'); if (L.info && L.info.mode === 'session') { em.value = L.info.email; em.readOnly = true; } paintLogin(); });
+  $('#lgOtpGo').addEventListener('click', function () { if (L.otpSent) otpVerify(); else otpSend(); });
+  $('#lgOtpResend').addEventListener('click', otpSend);
+  $('#login-code').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 6); this.removeAttribute('aria-invalid'); L.err = ''; paintLogin(); });
   paintLogin();
   rpc('apiAuthInfo').then(function (info) { L.info = info; if (info.mode === 'session') { var em = $('#login-email'); em.value = info.email; em.readOnly = true; } paintLogin(); }).catch(function (e) { L.err = e.message; paintLogin(); });
 }
@@ -149,11 +163,33 @@ function paintLogin() {
   var info = L.info, m = $('#lgMsg'); m.textContent = L.err || L.note; m.className = 'l-error' + (!L.err && L.note ? ' l-note' : '');
   $('#lgGo').disabled = L.busy || !info || info.mode === 'unconfigured';
   $('#lgGoTx').textContent = L.busy ? 'Đang xử lý…' : 'Đăng nhập';
+  $('#lgGo').hidden = L.otp; $('#lgOtp').hidden = !L.otp; $('#login-code').hidden = !L.otpSent; $('#lgOtpOpen').hidden = L.otp; $('#lgOtpBack').hidden = !L.otp;
+  $('#lgOtpResend').hidden = !L.otpSent; $('#lgOtpGo').disabled = L.busy || (L.otpSent && $('#login-code').value.length !== 6);
+  $('#lgOtpTx').textContent = L.busy ? 'Đang xử lý…' : (L.otpSent ? 'Xác nhận mã' : 'Gửi mã đăng nhập');
   var h = $('#lgHint');
-  if (!info) h.textContent = '';
+  if (L.otp) { h.textContent = L.otpSent ? 'Đã gửi mã tới ' + $('#login-email').value.trim() + ' (hiệu lực 10 phút). Kiểm tra cả mục Thư rác.' : 'Nhập email của tài khoản muốn vào, rồi bấm “Gửi mã đăng nhập”. Không cần đăng nhập Google.'; }
+  else if (!info) h.textContent = '';
   else if (info.mode === 'session') h.textContent = 'Đăng nhập bằng tài khoản Google của tổ chức.';
   else if (info.mode === 'unconfigured') h.textContent = 'Quản trị hệ thống chưa cấu hình đăng nhập Google (xem README, mục Đăng nhập).';
   else h.textContent = 'Email chỉ để gợi ý tài khoản Google; để trống nếu muốn chọn tài khoản khác.';
+}
+function otpEmail() {
+  var em = $('#login-email'), v = em.value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { em.setAttribute('aria-invalid', 'true'); L.err = 'Hãy nhập email đúng định dạng, ví dụ ten@truong.edu.vn.'; paintLogin(); em.focus(); return ''; }
+  return v;
+}
+function otpSend() {
+  if (L.busy) return; var v = otpEmail(); if (!v) return;
+  L.busy = true; L.err = ''; paintLogin();
+  rpc('apiOtpSend', v, L.role).then(function () { L.otpSent = true; L.busy = false; L.note = ''; paintLogin(); var c = $('#login-code'); c.value = ''; c.focus(); })
+    .catch(function (e) { L.busy = false; L.err = e.message; paintLogin(); });
+}
+function otpVerify() {
+  if (L.busy) return; var v = otpEmail(); if (!v) return; var code = $('#login-code').value;
+  if (code.length !== 6) { $('#login-code').setAttribute('aria-invalid', 'true'); L.err = 'Mã gồm 6 chữ số.'; paintLogin(); return; }
+  L.busy = true; L.err = ''; paintLogin();
+  rpc('apiOtpVerify', v, code, L.role).then(function (d) { S.token = d.token; lsSet('llkh_tok', d.token); if (d.note) setTimeout(function () { toast(d.note); }, 600); return enterApp(); })
+    .catch(function (e) { L.busy = false; L.err = e.message; $('#login-code').setAttribute('aria-invalid', 'true'); paintLogin(); });
 }
 function loginGo() {
   if (L.busy || !L.info) return;

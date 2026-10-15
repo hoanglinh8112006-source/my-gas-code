@@ -32,10 +32,17 @@ function fmtDT(iso) { if (!iso) return ''; var d = new Date(iso); if (isNaN(d)) 
 
 /* ---------- Kiểm tra định dạng ---------- */
 var VAL = {
-  date: function (v) { if (!v) return ''; var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v); if (!m) return 'Nhập theo dạng dd/mm/yyyy.'; var d = new Date(+m[3], m[2] - 1, +m[1]); return (d.getFullYear() == m[3] && d.getMonth() == m[2] - 1 && d.getDate() == m[1] && +m[3] > 1900 && d <= new Date()) ? '' : 'Ngày không hợp lệ.'; },
-  year: function (v) { return !v || (/^\d{4}$/.test(v) && +v >= 1900 && +v <= new Date().getFullYear() + 1) ? '' : 'Nhập năm gồm 4 chữ số.'; },
-  monthyear: function (v) { return !v || (/^(0?[1-9]|1[0-2])\/\d{4}$/.test(v)) ? '' : 'Nhập theo dạng mm/yyyy.'; },
-  email: function (v) { return !v || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? '' : 'Email không hợp lệ.'; }
+  date: function (v) { return CV.chk.date(v); },
+  year: function (v) { return CV.chk.year(v); },
+  monthyear: function (v) { return CV.chk.monthYear(v); },
+  email: function (v) { return CV.chk.email(v); },
+  phone: function (v) { return CV.chk.phone(v); },
+  addr: function (v) { return CV.chk.addr(v, window.VN_GEO).msg; },
+  doi: function (v) { return CV.chk.doi(v); },
+  issn: function (v) { return CV.chk.issn(v); },
+  isbn: function (v) { return CV.chk.isbn(v); },
+  url: function (v) { return CV.chk.url(v); },
+  orcid: function (v) { return CV.chk.orcid(v); }
 };
 
 /* ---------- Dựng trường nhập có ràng buộc dữ liệu ---------- */
@@ -44,6 +51,7 @@ function fld(label, path, o) {
   var id = 'f_' + path.replace(/\./g, '_'), inner;
   var attrs = 'id="' + id + '" data-bind="' + path + '"' + (o.v ? ' data-v="' + o.v + '"' : '') + (o.ro ? ' readonly' : '') + (o.ph ? ' placeholder="' + esc(o.ph) + '"' : '') + (o.list ? ' data-combo="' + o.list + '" autocomplete="off"' : '') + (o.seg ? ' data-combo-seg="1"' : '') + (o.max ? ' maxlength="' + o.max + '"' : '');
   if (o.v === 'date') attrs += ' data-mask="date" inputmode="numeric" maxlength="10"';
+  if (o.v === 'phone') attrs += ' data-mask="phone" inputmode="numeric" maxlength="10"';
   if (o.t === 'select') inner = '<select ' + attrs + '><option value=""></option>' + (o.opts || []).map(function (x) { var ov = x.v != null ? x.v : x, ol = x.l != null ? x.l : x; return '<option value="' + esc(ov) + '"' + (ov === val ? ' selected' : '') + '>' + esc(ol) + '</option>'; }).join('') + '</select>';
   else if (o.t === 'area') inner = '<textarea rows="' + (o.rows || 3) + '" ' + attrs + '>' + esc(val) + '</textarea>';
   else if (o.t === 'check') return '<div class="f ' + (o.cls || '') + '"><label class="chk"><input type="checkbox" data-bind="' + path + '"' + (val ? ' checked' : '') + '><span>' + label + (o.hint ? '<br><span class="muted small">' + o.hint + '</span>' : '') + '</span></label></div>';
@@ -70,7 +78,7 @@ var COMBO = {
   provinces: { src: function () { return catalog('provinces'); }, alpha: 1 },
   degrees: { src: function () { return Object.keys(CV.DEG_RANK); }, alpha: 1 },
   titles: { src: function () { return ['Giáo sư', 'Phó giáo sư']; }, alpha: 1 },
-  years: { src: function () { var y = new Date().getFullYear() + 1, a = []; for (; y >= 1950; y--) a.push(String(y)); return a; } },
+  years: { src: function () { var y = new Date().getFullYear(), a = []; for (; y >= 1950; y--) a.push(String(y)); return a; } },
   geo: { find: function (q, qq) { return geoFind(q, qq); } },
   idplace: { src: function () { return [CV.CCCD_PLACE, 'Công an tỉnh/thành phố']; } }
 };
@@ -169,8 +177,30 @@ function updateSaveBar() {
 }
 window.addEventListener('beforeunload', function (e) { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
+/* Chuẩn hoá địa chỉ theo danh mục rồi kiểm tra định dạng; trả về danh sách lỗi (rỗng = được lưu). */
+var ADDR_PATHS = ['basic.pob', 'basic.hometown', 'basic.address'];
+function preSaveErrors() {
+  var changed = false;
+  ADDR_PATHS.forEach(function (p) { var v = getPath(S.profile, p), r = CV.chk.addr(v, window.VN_GEO); if (r.ok && r.canonical !== v) { setPath(S.profile, p, r.canonical); changed = true; } });
+  if (changed && S.route === 'basic') render();
+  return CV.formatErrors(S.profile, window.VN_GEO);
+}
+var ROUTE_NAME = { basic: 'Thông tin cơ bản', training: 'Quá trình đào tạo', work: 'Quá trình công tác', projects: 'Đề tài tham gia', pubs: 'Công bố khoa học', awards: 'Giải thưởng, sáng chế', extra: 'Thông tin bổ sung' };
+function showFormatErrors(errs) {
+  S.touched = true;
+  var m = openModal('<header><h2>Chưa thể lưu hồ sơ</h2><button class="x" data-close aria-label="Đóng">×</button></header><div class="body"><p>Có ' + errs.length + ' dữ liệu chưa đúng định dạng. Hãy sửa rồi lưu lại.</p><ul class="errlist">' +
+    errs.slice(0, 15).map(function (e) { return '<li><b>' + esc(e.label) + '</b> <span class="muted small">(' + esc(ROUTE_NAME[e.route] || '') + ')</span><br>' + esc(e.msg) + ' <button type="button" class="btn link" data-eg="' + e.route + '">Sửa ngay</button></li>'; }).join('') + (errs.length > 15 ? '<li class="muted">…và ' + (errs.length - 15) + ' mục khác.</li>' : '') + '</ul></div><footer><button class="btn primary" data-close>Đã hiểu</button></footer>', { wide: false });
+  m.root.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-eg]'); if (!b) return; m.close(); var r = b.getAttribute('data-eg'); if (S.route !== r) { S.route = r; } render(); window.scrollTo(0, 0); });
+  if (S.route === 'basic') checkAllFields();
+}
+function checkAllFields() {
+  $$('[data-v]').forEach(function (el) { var vt = el.getAttribute('data-v'), w = el.closest('.f'); if (!VAL[vt] || !w) return; var er = VAL[vt](el.value.trim()); w.classList.toggle('invalid', !!er); var d = $('.err', w); if (d) d.textContent = er; });
+}
 function saveProfile(force) {
   if (S.saving) return Promise.resolve(false);
+  var errs = preSaveErrors();
+  if (errs.length) { showFormatErrors(errs); return Promise.resolve(false); }
+  S.touched = false;
   S.saving = true; updateSaveBar();
   return rpc('apiSaveProfile', S.profile, force ? '' : S.updatedAt).then(function (r) {
     if (r.conflict) {
@@ -221,10 +251,11 @@ function openForm(spec) {
   function fieldHtml(f) {
     var id = 'mf_' + f.k, v = rec[f.k] == null ? '' : rec[f.k], req = f.req ? ' <span class="req">*</span>' : '';
     var h = '<div class="f ' + (f.full === false ? '' : 'full') + '" data-fk="' + f.k + '"><label for="' + id + '">' + esc(f.label) + req + '</label>';
-    if (f.t === 'select') h += '<select id="' + id + '"><option value=""></option>' + f.opts.map(function (o) { var ov = o.v != null ? o.v : o, ol = o.l != null ? o.l : o; return '<option value="' + esc(ov) + '"' + (ov === v ? ' selected' : '') + '>' + esc(ol) + '</option>'; }).join('') + '</select>';
+    if (f.t === 'select') h += '<select id="' + id + '"><option value="">' + esc(f.blank || '') + '</option>' + f.opts.map(function (o) { var ov = o.v != null ? o.v : o, ol = o.l != null ? o.l : o; return '<option value="' + esc(ov) + '"' + (ov === v ? ' selected' : '') + '>' + esc(ol) + '</option>'; }).join('') + '</select>';
     else if (f.t === 'area') h += '<textarea id="' + id + '" rows="' + (f.rows || 3) + '">' + esc(v) + '</textarea>';
     else if (f.t === 'check') h = '<div class="f full" data-fk="' + f.k + '"><label class="chk"><input id="' + id + '" type="checkbox"' + (v ? ' checked' : '') + '><span>' + esc(f.label) + '</span></label>';
     else if (f.t === 'authors') h += '<div class="authors" id="' + id + '"></div>';
+    else if (f.t === 'file') h += '<div class="filefld" id="' + id + '"></div>';
     else if (f.t === 'tags') h += '<input id="' + id + '" type="text" value="' + esc((v || []).join(', ')) + '" placeholder="phân tách bằng dấu phẩy">';
     else h += '<input id="' + id + '" type="text" value="' + esc(v) + '"' + (f.list ? ' data-combo="' + f.list + '" autocomplete="off"' : '') + (f.ph ? ' placeholder="' + esc(f.ph) + '"' : '') +
   (f.v === 'monthyear' ? ' data-mask="monthyear" inputmode="numeric" maxlength="7"' : '') + '>';
@@ -236,7 +267,7 @@ function openForm(spec) {
   var root = m.root;
   function visible(f) { return !f.show || f.show(rec); }
   function readField(f) {
-    var el = $('#mf_' + f.k, root); if (!el || f.t === 'authors') return;
+    var el = $('#mf_' + f.k, root); if (!el || f.t === 'authors' || f.t === 'file') return;
     if (f.t === 'check') rec[f.k] = el.checked; else if (f.t === 'tags') rec[f.k] = el.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean); else rec[f.k] = el.value.trim();
   }
   function applyShow() { spec.fields.forEach(function (f) { var w = $('[data-fk="' + f.k + '"]', root); if (w) w.hidden = !visible(f); }); }
@@ -261,6 +292,32 @@ function openForm(spec) {
   root.addEventListener('change', function () { spec.fields.forEach(readField); applyShow(); if (spec.onChange) spec.onChange(rec, root); });
   spec.fields.forEach(function (f) { if (f.t === 'authors' && !rec.authors) rec.authors = [{ name: '', me: true, main: false, corr: false }]; });
   renderAuthors(); applyShow();
+  var fileSpec = spec.fields.filter(function (f) { return f.t === 'file'; })[0];
+  function renderFile() {
+    if (!fileSpec) return; var box = $('#mf_' + fileSpec.k, root); if (!box) return; var fl = rec[fileSpec.k];
+    box.innerHTML = (fl && fl.id ? '<div class="filechip2"><span class="fc2-ic">PDF</span><div class="fc2-t"><b>' + esc(fl.name) + '</b><span class="muted small">' + (fl.size ? (fl.size / 1048576).toFixed(1) + ' MB · ' : '') + 'Chỉ bạn xem được</span></div><button type="button" class="btn sm" data-ff="dl">Tải xuống</button><button type="button" class="btn sm danger" data-ff="rm">Gỡ tệp</button></div>' :
+      '<label class="btn" data-ffpick="1">Chọn tệp PDF<input type="file" accept=".pdf,application/pdf" hidden></label> <span class="muted small" id="ffMsg">Tối đa 10 MB. Tuỳ chọn, ngoài DOI/URL.</span>');
+  }
+  if (fileSpec) {
+    renderFile();
+    root.addEventListener('change', function (e) {
+      var t = e.target; if (t.type !== 'file' || !t.closest('.filefld')) return; var f = t.files && t.files[0]; if (!f) return;
+      var msg = $('#ffMsg', root);
+      if (!/\.pdf$/i.test(f.name)) { if (msg) msg.textContent = 'Chỉ nhận tệp .pdf.'; return; }
+      if (f.size > 10 * 1024 * 1024) { if (msg) msg.textContent = 'Tệp lớn hơn 10 MB.'; return; }
+      if (msg) msg.innerHTML = '<span class="spinner" style="display:inline-block;vertical-align:middle;width:14px;height:14px;margin:0 6px 0 0"></span>Đang tải lên…';
+      var fr = new FileReader(); fr.onerror = function () { if (msg) msg.textContent = 'Không đọc được tệp.'; };
+      fr.onload = function () {
+        rpc('apiUploadPubFile', f.name, String(fr.result).split(',')[1] || '').then(function (r) { rec[fileSpec.k] = r; renderFile(); toast('Đã tải tệp lên. Bấm Lưu ở cuối form rồi Lưu hồ sơ.'); }).catch(function (er) { renderFile(); var m2 = $('#ffMsg', root); if (m2) m2.textContent = er.message; });
+      };
+      fr.readAsDataURL(f);
+    });
+    root.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-ff]'); if (!b) return;
+      if (b.getAttribute('data-ff') === 'rm') { rec[fileSpec.k] = null; renderFile(); return; }
+      b.disabled = true; rpc('apiGetPubFile', rec[fileSpec.k].id).then(function (r) { downloadB64(r.base64, r.fileName, 'application/pdf'); }).catch(function (er) { toast(er.message, true); }).then(function () { b.disabled = false; });
+    });
+  }
   function save() {
     spec.fields.forEach(readField); if ($('.authors', root)) syncAuthors();
     var ok = true, first = null;
@@ -275,6 +332,13 @@ function openForm(spec) {
       w.classList.toggle('invalid', !!err); var er = $('.err', w); if (er) er.textContent = err;
       if (err) { ok = false; if (!first) first = w; }
     });
+    if (ok && spec.check) {      // kiểm tra chéo giữa các ô (vd. năm hoàn thành không trước năm bắt đầu)
+      var cx = spec.check(rec) || {};
+      Object.keys(cx).forEach(function (k) {
+        var w = $('[data-fk="' + k + '"]', root); if (!w) return;
+        w.classList.add('invalid'); var er = $('.err', w); if (er) er.textContent = cx[k]; ok = false; if (!first) first = w;
+      });
+    }
     if (!ok) { var inp = $('input,select,textarea', first); if (inp) inp.focus(); return; }
     spec.fields.forEach(function (f) { if (!visible(f)) { if (f.t === 'check') rec[f.k] = false; else if (f.t !== 'authors') rec[f.k] = f.t === 'tags' ? [] : ''; } });
     if (rec.authors) rec.authors = rec.authors.filter(function (a) { return a.name.trim(); });
@@ -313,7 +377,7 @@ function maskMonthYear(v, inserting) {
 document.addEventListener('input', function (e) {
   var el = e.target, k = el.getAttribute && el.getAttribute('data-mask'); if (!k) return;
   var ins = !!e.inputType && e.inputType.indexOf('insert') === 0 && e.inputType !== 'insertFromPaste';
-  var nv = k === 'date' ? maskDate(el.value, ins) : k === 'monthyear' ? maskMonthYear(el.value, ins) : el.value;
+  var nv = k === 'date' ? maskDate(el.value, ins) : k === 'monthyear' ? maskMonthYear(el.value, ins) : k === 'phone' ? String(el.value).replace(/\D/g, '').slice(0, 10) : el.value;
   if (nv !== el.value) el.value = nv;
 }, true);   // capture: chạy TRƯỚC bộ ràng buộc dữ liệu nên hồ sơ nhận giá trị đã định dạng
 document.addEventListener('mousedown', function (e) {                    // nạp ngày đang gõ vào lịch trước khi mở
@@ -421,6 +485,7 @@ function render() {
     '<span class="role-pill">' + ico('grad', 16) + roleName + '</span></header><main class="content" id="view"></main></div></div>' +
     (showBar ? '<div class="savebar"><span class="st" id="saveState"></span><span class="spacer"></span><button class="btn primary" id="saveBtn" data-act="save">Lưu</button></div>' : '');
   var fn = PAGES[S.route] || PAGES.basic; fn($('#view'));
+  if (S.touched && S.route === 'basic') checkAllFields();
   updateSaveBar();
 }
 ACT.go = function (r) {
